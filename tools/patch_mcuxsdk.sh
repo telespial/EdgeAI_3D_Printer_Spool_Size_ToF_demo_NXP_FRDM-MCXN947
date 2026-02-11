@@ -33,5 +33,5 @@ fi
 # before adding new files).
 if [[ -f "$TOF_CMAKELISTS" ]]; then
   echo "[patch] fix: normalize tof_demo CMakeLists sources"
-  perl -0777 -pi -e 's|(mcux_add_source\\(\\s+BASE_PATH \\$\\{TOF_ROOT\\}\\s+SOURCES)(.*?)(\\)\\s+mcux_add_include)|$1\\n            src\\/tof_demo\\.c\\n)\\n\\nmcux_add_include|ms' "$TOF_CMAKELISTS" || true
+  perl -0777 -pi -e 's|(mcux_add_source\\(\\s+BASE_PATH \\$\\{TOF_ROOT\\}\\s+SOURCES)(.*?)(\\)\\s+mcux_add_include)|$1\\n            src\\/tof_demo\\.c\\n            src\\/tmf8828_quick\\.c\\n            src\\/par_lcd_s035\\.c\\n            src\\/platform\\/display_hal\\.c\\n)\\n\\nmcux_add_include|ms' "$TOF_CMAKELISTS" || true
 fi

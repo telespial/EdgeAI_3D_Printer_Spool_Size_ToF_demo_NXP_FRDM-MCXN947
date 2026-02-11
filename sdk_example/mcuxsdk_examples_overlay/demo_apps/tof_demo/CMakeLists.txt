@@ -17,6 +17,9 @@ endif()
 mcux_add_source(
     BASE_PATH ${TOF_ROOT}
     SOURCES src/tof_demo.c
+            src/tmf8828_quick.c
+            src/par_lcd_s035.c
+            src/platform/display_hal.c
 )
 
 mcux_add_include(BASE_PATH ${TOF_ROOT} INCLUDES src)
