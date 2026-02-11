@@ -1,0 +1,23 @@
+# It is optional to provide example specific Kconfig.
+
+rsource "${SdkRootDirPath}/Kconfig.mcuxpresso"
+
+mainmenu "ToF Demo Configuration"
+
+menuconfig TOF_USE_PAR_LCD_S035
+    bool "Enable PAR-LCD-S035 (FlexIO ST7796S) display"
+    default y
+    help
+      Enables the MCUX display bus + controller drivers required for the
+      FRDM-MCXN947 PAR-LCD-S035 shield (ST7796S, 8080 via FlexIO).
+
+if TOF_USE_PAR_LCD_S035
+
+config TOF_USE_PAR_LCD_S035_DRIVERS
+    bool
+    default y
+    # The dbi_* drivers are intentionally hidden in MCUX; select them via an app prompt.
+    select MCUX_COMPONENT_driver.dbi_flexio_edma
+    select MCUX_COMPONENT_driver.st7796s
+
+endif

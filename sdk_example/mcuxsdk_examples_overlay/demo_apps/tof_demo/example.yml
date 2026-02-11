@@ -1,0 +1,6 @@
+name: tof_demo
+description: Time-of-flight demo scaffold for FRDM-MCXN947 + TMF8828 + LCD-PAR-S035
+boards:
+  - frdmmcxn947
+toolchains:
+  - armgcc
