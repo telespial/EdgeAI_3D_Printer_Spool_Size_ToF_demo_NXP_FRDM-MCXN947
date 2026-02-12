@@ -47,8 +47,8 @@ git checkout GOLDEN_2026-02-12_v3_tp_fast_persistent_ai_bootstrap
 
 ### 2026-02-12 Golden (Fast Persistent TP + AI Bootstrap)
 - Tag: `GOLDEN_2026-02-12_v3_tp_fast_persistent_ai_bootstrap`
-- Lock tag: `GOLDEN_LOCK_2026-02-12_v3_PENDING`
-- Commit: `PENDING`
+- Lock tag: `GOLDEN_LOCK_2026-02-12_v3_89e625d`
+- Commit: `89e625dc427de268a8cb0ffdf3a4a819a0530cc8`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:
   - TP roll + bargraph response path tuned for smoother `~100 ms` updates.

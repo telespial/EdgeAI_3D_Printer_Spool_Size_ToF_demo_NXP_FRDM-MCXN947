@@ -38,7 +38,7 @@
 ## Restore Baseline
 - Golden restore index: `docs/RESTORE_POINTS.md`
 - Golden tag: `GOLDEN_2026-02-12_v3_tp_fast_persistent_ai_bootstrap`
-- Lock tag: `GOLDEN_LOCK_2026-02-12_v3_PENDING`
+- Lock tag: `GOLDEN_LOCK_2026-02-12_v3_89e625d`
 - Failsafe pointer: `docs/failsafe.md`
 - Failsafe flash command: `./tools/flash_failsafe.sh "$(sed -n '1p' docs/failsafe.md)"`
 
