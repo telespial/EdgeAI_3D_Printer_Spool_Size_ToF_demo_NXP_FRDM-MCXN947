@@ -23,8 +23,8 @@ git checkout GOLDEN_2026-02-12_v1_q1_grid_terminal_stable
 
 ### 2026-02-12 Golden (Initial Stable Q1 Grid + Terminal)
 - Tag: `GOLDEN_2026-02-12_v1_q1_grid_terminal_stable`
-- Lock tag: `GOLDEN_LOCK_2026-02-12_v1_<SHORT_SHA>`
-- Commit: `git rev-parse GOLDEN_2026-02-12_v1_q1_grid_terminal_stable`
+- Lock tag: `GOLDEN_LOCK_2026-02-12_v1_66ccdbe`
+- Commit: `66ccdbed3a348b6c7384a20b2320835a34b78e01`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:
   - 8x8 grid and tiny terminal are both in Q1 with aligned width.
