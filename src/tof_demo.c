@@ -24,6 +24,10 @@
 #define TOF_Q1_TOP_Y1 ((TOF_LCD_H / 2) - 1)
 #define TOF_Q1_BOT_Y0 (TOF_Q1_TOP_Y1 + 1)
 #define TOF_Q1_BOT_Y1 (TOF_LCD_H - 1)
+#define TOF_TP_X0 (TOF_Q_W + 1)
+#define TOF_TP_X1 (TOF_LCD_W - 1)
+#define TOF_TP_Y0 0
+#define TOF_TP_Y1 (TOF_LCD_H - 1)
 #define TOF_LOCKED_NEAR_MM 50u
 #define TOF_LOCKED_FAR_MM  150u
 #define TOF_STALE_LIMIT_FRAMES 120u
@@ -72,6 +76,9 @@
 #define TOF_DBG_LINE_H ((TOF_DBG_CHAR_H * TOF_DBG_SCALE) + 2)
 #define TOF_DBG_LINES 6u
 #define TOF_DBG_COLS 19u
+
+#define TOF_TP_MM_FULL_NEAR 50u
+#define TOF_TP_MM_FULL_FAR  100u
 
 #define TOF_INPUT_MODE_LIVE          0u
 #define TOF_INPUT_MODE_SYNTH_FIXED   1u
@@ -132,6 +139,10 @@ static int16_t s_dbg_y1;
 static bool s_dbg_force_redraw = true;
 static char s_dbg_prev[TOF_DBG_LINES][TOF_DBG_COLS + 1u];
 static uint32_t s_dbg_last_tick = 0u;
+static bool s_tp_force_redraw = true;
+static uint32_t s_tp_last_tick = 0u;
+static uint16_t s_tp_last_outer_ry = 0u;
+static bool s_tp_last_live = false;
 
 static uint16_t s_range_near_mm = TOF_LOCKED_NEAR_MM;
 static uint16_t s_range_far_mm = TOF_LOCKED_FAR_MM;
@@ -490,6 +501,217 @@ static uint16_t tof_calc_actual_distance_mm(const uint16_t mm[64])
     return 0u;
 }
 
+static uint32_t tof_isqrt_u32(uint32_t n)
+{
+    uint32_t op = n;
+    uint32_t res = 0u;
+    uint32_t one = (uint32_t)1u << 30;
+
+    while (one > op)
+    {
+        one >>= 2;
+    }
+
+    while (one != 0u)
+    {
+        if (op >= (res + one))
+        {
+            op -= (res + one);
+            res = (res >> 1) + one;
+        }
+        else
+        {
+            res >>= 1;
+        }
+        one >>= 2;
+    }
+
+    return res;
+}
+
+static int32_t tof_ellipse_half_width(int32_t rx, int32_t ry, int32_t y_abs)
+{
+    if (rx <= 0 || ry <= 0 || y_abs >= ry)
+    {
+        return 0;
+    }
+
+    const uint32_t ry_u = (uint32_t)ry;
+    const uint32_t y_u = (uint32_t)y_abs;
+    const uint32_t term = (ry_u * ry_u) - (y_u * y_u);
+    const uint32_t root = tof_isqrt_u32(term);
+    return (int32_t)(((uint64_t)(uint32_t)rx * (uint64_t)root) / (uint64_t)ry_u);
+}
+
+static void tof_draw_filled_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint16_t color)
+{
+    if (rx <= 0 || ry <= 0)
+    {
+        return;
+    }
+
+    for (int32_t y = -ry; y <= ry; y++)
+    {
+        const int32_t y_abs = (y < 0) ? -y : y;
+        const int32_t xw = tof_ellipse_half_width(rx, ry, y_abs);
+        const int32_t py = cy + y;
+        if (py < TOF_TP_Y0 || py > TOF_TP_Y1)
+        {
+            continue;
+        }
+
+        int32_t x0 = cx - xw;
+        int32_t x1 = cx + xw;
+        x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
+        x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
+        if (x1 >= x0)
+        {
+            display_hal_fill_rect(x0, py, x1, py, color);
+        }
+    }
+}
+
+static uint32_t tof_tp_fullness_from_mm(uint16_t mm)
+{
+    if (mm == 0u)
+    {
+        return 160u;
+    }
+
+    if (mm <= TOF_TP_MM_FULL_NEAR || mm >= TOF_TP_MM_FULL_FAR)
+    {
+        return 255u;
+    }
+
+    const uint16_t mid = (uint16_t)((TOF_TP_MM_FULL_NEAR + TOF_TP_MM_FULL_FAR) / 2u);
+    const uint16_t span = (uint16_t)((TOF_TP_MM_FULL_FAR - TOF_TP_MM_FULL_NEAR) / 2u);
+    const uint16_t delta = (mm > mid) ? (uint16_t)(mm - mid) : (uint16_t)(mid - mm);
+    return 80u + (((uint32_t)delta * 175u) / (uint32_t)span);
+}
+
+static uint16_t tof_tp_body_color(uint32_t t, bool live_data)
+{
+    const uint32_t r = live_data ? (26u + ((t * 120u) / 255u)) : (18u + ((t * 48u) / 255u));
+    const uint32_t g = live_data ? (72u + (((255u - t) * 96u) / 255u)) : (28u + (((255u - t) * 40u) / 255u));
+    const uint32_t b = live_data ? (120u + ((t * 96u) / 255u)) : (44u + ((t * 24u) / 255u));
+    return pack_rgb565(r, g, b);
+}
+
+static uint16_t tof_tp_layer_color(uint32_t layer, uint32_t layers, bool live_data)
+{
+    const uint32_t t = (layers > 1u) ? ((layer * 255u) / (layers - 1u)) : 0u;
+    const uint32_t r = live_data ? (220u - (t / 3u)) : (120u - (t / 4u));
+    const uint32_t g = live_data ? (64u + ((t * 132u) / 255u)) : (56u + ((t * 64u) / 255u));
+    const uint32_t b = live_data ? (72u + (((255u - t) * 140u) / 255u)) : (64u + (((255u - t) * 64u) / 255u));
+    return pack_rgb565(r, g, b);
+}
+
+static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32_t tick)
+{
+    if (!s_tp_force_redraw && (uint32_t)(tick - s_tp_last_tick) < TOF_DEBUG_UPDATE_TICKS)
+    {
+        return;
+    }
+
+    const uint16_t actual_mm = tof_calc_actual_distance_mm(mm);
+    const uint32_t fullness = tof_tp_fullness_from_mm(actual_mm);
+
+    const int32_t area_w = (TOF_TP_X1 - TOF_TP_X0) + 1;
+    const int32_t area_h = (TOF_TP_Y1 - TOF_TP_Y0) + 1;
+    const int32_t outer_ry_min = 42;
+    int32_t outer_ry_max = (area_h / 2) - 10;
+    if (outer_ry_max < outer_ry_min)
+    {
+        outer_ry_max = outer_ry_min;
+    }
+
+    const int32_t outer_ry = outer_ry_min + (int32_t)((fullness * (uint32_t)(outer_ry_max - outer_ry_min)) / 255u);
+    if (!s_tp_force_redraw && (uint16_t)outer_ry == s_tp_last_outer_ry && live_data == s_tp_last_live)
+    {
+        s_tp_last_tick = tick;
+        return;
+    }
+
+    const int32_t outer_rx = (outer_ry * 78) / 100;
+    const int32_t inner_ry = tof_clamp_i32((outer_ry * 36) / 100, 14, outer_ry - 6);
+    const int32_t inner_rx = (outer_rx * inner_ry) / outer_ry;
+    const int32_t hole_ry = tof_clamp_i32((inner_ry * 56) / 100, 8, inner_ry - 2);
+    const int32_t hole_rx = tof_clamp_i32((inner_rx * 56) / 100, 8, inner_rx - 2);
+    const int32_t depth = tof_clamp_i32(24 + (outer_ry / 4), 20, area_w / 4);
+    const int32_t cy = TOF_TP_Y0 + (area_h / 2);
+    int32_t back_cx = TOF_TP_X0 + (area_w / 2) - (depth / 2);
+    int32_t front_cx = back_cx + depth;
+
+    int32_t min_x = back_cx - outer_rx;
+    int32_t max_x = front_cx + outer_rx;
+    if (min_x < (TOF_TP_X0 + 2))
+    {
+        const int32_t shift = (TOF_TP_X0 + 2) - min_x;
+        back_cx += shift;
+        front_cx += shift;
+    }
+    min_x = back_cx - outer_rx;
+    max_x = front_cx + outer_rx;
+    if (max_x > (TOF_TP_X1 - 2))
+    {
+        const int32_t shift = max_x - (TOF_TP_X1 - 2);
+        back_cx -= shift;
+        front_cx -= shift;
+    }
+
+    display_hal_fill_rect(TOF_TP_X0, TOF_TP_Y0, TOF_TP_X1, TOF_TP_Y1, pack_rgb565(7u, 9u, 18u));
+
+    for (int32_t y = -outer_ry; y <= outer_ry; y++)
+    {
+        const int32_t py = cy + y;
+        if (py < TOF_TP_Y0 || py > TOF_TP_Y1)
+        {
+            continue;
+        }
+
+        const int32_t y_abs = (y < 0) ? -y : y;
+        const int32_t xw = tof_ellipse_half_width(outer_rx, outer_ry, y_abs);
+        int32_t x0 = back_cx - xw;
+        int32_t x1 = front_cx + xw;
+        x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
+        x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
+        if (x1 < x0)
+        {
+            continue;
+        }
+
+        const uint32_t t = (uint32_t)(((int64_t)(y + outer_ry) * 255) / ((outer_ry * 2) + 1));
+        const uint16_t body_color = tof_tp_body_color(t, live_data);
+        display_hal_fill_rect(x0, py, x1, py, body_color);
+    }
+
+    tof_draw_filled_ellipse(back_cx, cy, outer_rx, outer_ry, pack_rgb565(64u, 50u, 42u));
+
+    const uint32_t layers = 8u;
+    for (uint32_t i = 0u; i < layers; i++)
+    {
+        const int32_t ry_layer = outer_ry - (int32_t)((i * (uint32_t)(outer_ry - inner_ry)) / (layers - 1u));
+        const int32_t rx_layer = (outer_rx * ry_layer) / outer_ry;
+        const uint16_t layer_color = tof_tp_layer_color(i, layers, live_data);
+        tof_draw_filled_ellipse(front_cx, cy, rx_layer, ry_layer, layer_color);
+    }
+
+    tof_draw_filled_ellipse(back_cx, cy, hole_rx, hole_ry, pack_rgb565(14u, 14u, 18u));
+    tof_draw_filled_ellipse(front_cx, cy, inner_rx, inner_ry, pack_rgb565(176u, 140u, 92u));
+    tof_draw_filled_ellipse(front_cx, cy, hole_rx, hole_ry, pack_rgb565(20u, 18u, 16u));
+
+    const int32_t hl_x0 = tof_clamp_i32(front_cx + (outer_rx / 3), TOF_TP_X0, TOF_TP_X1 - 2);
+    const int32_t hl_x1 = tof_clamp_i32(hl_x0 + 2, TOF_TP_X0, TOF_TP_X1);
+    const int32_t hl_y0 = tof_clamp_i32(cy - (outer_ry * 3 / 4), TOF_TP_Y0, TOF_TP_Y1);
+    const int32_t hl_y1 = tof_clamp_i32(cy + (outer_ry * 3 / 4), TOF_TP_Y0, TOF_TP_Y1);
+    display_hal_fill_rect(hl_x0, hl_y0, hl_x1, hl_y1, pack_rgb565(255u, 228u, 152u));
+
+    s_tp_last_tick = tick;
+    s_tp_last_outer_ry = (uint16_t)outer_ry;
+    s_tp_last_live = live_data;
+    s_tp_force_redraw = false;
+}
+
 static void tof_update_debug_panel(const uint16_t mm[64],
                                    bool live_data,
                                    bool got_live,
@@ -624,7 +846,6 @@ static void tof_ui_init(void)
     tof_build_layout();
     display_hal_fill(s_ui_bg);
     display_hal_fill_rect(TOF_Q_W, 0, TOF_Q_W, TOF_LCD_H - 1, pack_rgb565(20u, 24u, 28u));
-    display_hal_fill_rect(TOF_Q_W * 2, 0, TOF_Q_W * 2, TOF_LCD_H - 1, pack_rgb565(20u, 24u, 28u));
     display_hal_fill_rect(s_dbg_x0, TOF_Q1_BOT_Y0, s_dbg_x1, TOF_Q1_BOT_Y0, pack_rgb565(28u, 32u, 36u));
     display_hal_fill_rect(s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y1, s_ui_dbg_bg);
     display_hal_fill_rect(s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y0, pack_rgb565(32u, 38u, 44u));
@@ -648,6 +869,10 @@ static void tof_ui_init(void)
     s_range_far_mm = TOF_LOCKED_FAR_MM;
     s_dbg_last_tick = 0u;
     s_dbg_force_redraw = true;
+    s_tp_last_tick = 0u;
+    s_tp_last_outer_ry = 0u;
+    s_tp_last_live = false;
+    s_tp_force_redraw = true;
 }
 
 #if !TOF_DEBUG_RAW_DRAW
@@ -1573,6 +1798,8 @@ int main(void)
             last_draw_tick = tick;
             have_drawn_frame = true;
         }
+
+        tof_update_spool_model(frame_mm, (tof_ok && have_live), tick);
 
         tof_update_debug_panel(frame_mm,
                                (tof_ok && have_live),

@@ -7,3 +7,6 @@ downloads/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Local reference image; do not track in project history
+docs/spool.png
