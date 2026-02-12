@@ -13,7 +13,7 @@ Rules:
 ```bash
 cd /path/to/ToF__demo_NXP_FRDM-MCXN947
 git fetch --tags
-git checkout GOLDEN_2026-02-12_v1_q1_grid_terminal_stable
+git checkout GOLDEN_2026-02-12_v2_spool_tube_segments23
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh
@@ -30,6 +30,19 @@ git checkout GOLDEN_2026-02-12_v1_q1_grid_terminal_stable
   - 8x8 grid and tiny terminal are both in Q1 with aligned width.
   - Terminal shows live range/avg/actual/status fields.
   - Draw pacing capped for responsive updates; corner dead-cell mitigation applied.
+- Failsafe artifact: see `docs/failsafe.md`.
+
+### 2026-02-12 Golden (spool Tube UI Across Segments 2+3)
+- Tag: `GOLDEN_2026-02-12_v2_spool_tube_segments23`
+- Lock tag: `GOLDEN_LOCK_2026-02-12_v2_28f9659`
+- Commit: `28f965992ac85df82d25cf77d50d72b0d01a7dfb`
+- Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
+- Behavior:
+  - Q1 keeps the 8x8 grid (upper half) and tiny runtime terminal (lower half).
+  - Divider between segments 2 and 3 is removed and both segments are rendered as one canvas.
+  - A colorful 3D spool tube is rendered across full segment 2+3 height.
+  - Tube diameter is distance-driven and set to full roll when distance is `<=50 mm` or `>=100 mm`.
+  - `docs/spool.png` is ignored and not tracked.
 - Failsafe artifact: see `docs/failsafe.md`.
 
 ## Template

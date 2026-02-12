@@ -14,6 +14,11 @@
   - full LCD split into 3 vertical columns
   - Q1 upper half: 8x8 heatmap grid
   - Q1 lower half: tiny runtime terminal (`LIVE`, `RNG`, `AVG`, `ACT`, status counters)
+  - segments 2 and 3 merged: colorful 3D spool tube render (full height)
+- spool tube distance behavior:
+  - full roll diameter at `<=50 mm`
+  - reduced diameter inside `50..100 mm`
+  - full roll diameter again at `>=100 mm`
 - Render stability updates in place:
   - complete-cycle draw preference + max draw gap cap (`500 ms`)
   - reduced wipe/blank transitions
@@ -24,12 +29,12 @@
 - Result: ok (build + flash + user-confirmed LCD behavior)
 - Build: `./tools/build_frdmmcxn947.sh debug`
 - Flash: `./tools/flash_frdmmcxn947.sh`
-- Notes: user confirmed working state after lower-corner and terminal-width fixes.
+- Notes: user requested spool tube UI in segments 2+3; build/flash validated on board.
 
 ## Restore Baseline
 - Golden restore index: `docs/RESTORE_POINTS.md`
-- Golden tag: `GOLDEN_2026-02-12_v1_q1_grid_terminal_stable`
-- Lock tag: `GOLDEN_LOCK_2026-02-12_v1_66ccdbe`
+- Golden tag: `GOLDEN_2026-02-12_v2_spool_tube_segments23`
+- Lock tag: `GOLDEN_LOCK_2026-02-12_v2_28f9659`
 - Failsafe pointer: `docs/failsafe.md`
 - Failsafe flash command: `./tools/flash_failsafe.sh "$(sed -n '1p' docs/failsafe.md)"`
 
