@@ -51,9 +51,28 @@
 #define TMF8828_CAPTURE_COUNT_8X8 4u
 #define TMF8828_MIN_CONFIDENCE    0u
 #define TMF8828_CLOSE_CAL_MAX_MM  120u
-#define TMF8828_TOO_CLOSE_MM      20u
+#define TMF8828_TOO_CLOSE_MM      50u
 #define TMF8828_ZONE_HOLD_FRAMES  10u
+#define TMF8828_DUAL_OBJ_SPLIT_MM 300u
+#define TMF8828_EXPECTED_MIN_MM   50u
+#define TMF8828_EXPECTED_MAX_MM   150u
+/* Drop out-of-range updates when the previously published zone value was in-range.
+ * This suppresses near/far range toggling artifacts under close-hand occlusion.
+ */
+#ifndef TMF8828_RANGE_GLITCH_REJECT
+#define TMF8828_RANGE_GLITCH_REJECT 1u
+#endif
+/* Object selection policy when both object returns are valid:
+ * 0: nearest valid return
+ * 1: prefer obj0; use obj1 only when obj0 is invalid
+ * 2: strict obj0 only (ignore obj1 even if obj0 invalid)
+ */
+#ifndef TMF8828_OBJECT_SELECT_POLICY
+#define TMF8828_OBJECT_SELECT_POLICY 2u
+#endif
+#ifndef TMF8828_MEAS_PERIOD_MS
 #define TMF8828_MEAS_PERIOD_MS    24u
+#endif
 #define TMF8828_KILO_ITERATIONS   64u
 #define TMF8828_LOW_THRESHOLD_MM  0u
 #define TMF8828_HIGH_THRESHOLD_MM 0xFFFFu
@@ -61,8 +80,35 @@
 #define TMF8828_PERSISTENCE       0u
 #define TMF8828_ALG_SETTING0      0x84u
 
+/* 8x8 capture-to-zone map modes:
+ * 0: interleaved 4x4 phases (default)
+ * 1: 4x4 quadrants
+ * 2: 8x2 row bands per capture
+ * 3: 2x8 column bands per capture
+ */
+#ifndef TMF8828_ZONE_MAP_MODE
+#define TMF8828_ZONE_MAP_MODE 1u
+#endif
+
+#ifndef TMF8828_CAPTURE_REMAP_0
+#define TMF8828_CAPTURE_REMAP_0 1u
+#endif
+#ifndef TMF8828_CAPTURE_REMAP_1
+#define TMF8828_CAPTURE_REMAP_1 3u
+#endif
+#ifndef TMF8828_CAPTURE_REMAP_2
+#define TMF8828_CAPTURE_REMAP_2 0u
+#endif
+#ifndef TMF8828_CAPTURE_REMAP_3
+#define TMF8828_CAPTURE_REMAP_3 2u
+#endif
+
 #ifndef TMF8828_TRACE_GRIDS
 #define TMF8828_TRACE_GRIDS 0
+#endif
+
+#ifndef TMF8828_PACKET_DIAG
+#define TMF8828_PACKET_DIAG 0
 #endif
 
 /* TMF8828 shield EN is typically routed on Arduino D6 (P1_2 on FRDM-MCXN947). */
@@ -278,13 +324,35 @@ static bool tmf_recover_bus(uint32_t bus_idx)
 
 static uint32_t tmf_zone_index_8x8(uint32_t capture, uint32_t zone16)
 {
-    const uint32_t phase_x = capture & 0x1u;
-    const uint32_t phase_y = (capture >> 1u) & 0x1u;
+    static const uint8_t cap_remap[TMF8828_CAPTURE_COUNT_8X8] = {
+        (uint8_t)(TMF8828_CAPTURE_REMAP_0 & 0x3u),
+        (uint8_t)(TMF8828_CAPTURE_REMAP_1 & 0x3u),
+        (uint8_t)(TMF8828_CAPTURE_REMAP_2 & 0x3u),
+        (uint8_t)(TMF8828_CAPTURE_REMAP_3 & 0x3u),
+    };
+
+    const uint32_t cap = cap_remap[capture & 0x3u];
+    uint32_t x = 0u;
+    uint32_t y = 0u;
+
+#if (TMF8828_ZONE_MAP_MODE == 1u)
+    x = (zone16 & 0x3u) + ((cap & 0x1u) << 2u);
+    y = ((zone16 >> 2u) & 0x3u) + (((cap >> 1u) & 0x1u) << 2u);
+#elif (TMF8828_ZONE_MAP_MODE == 2u)
+    x = zone16 & 0x7u;
+    y = ((zone16 >> 3u) & 0x1u) + (cap << 1u);
+#elif (TMF8828_ZONE_MAP_MODE == 3u)
+    x = ((zone16 >> 3u) & 0x1u) + (cap << 1u);
+    y = zone16 & 0x7u;
+#else
+    const uint32_t phase_x = cap & 0x1u;
+    const uint32_t phase_y = (cap >> 1u) & 0x1u;
     const uint32_t local_x = zone16 & 0x3u;      /* 4 columns per subcapture */
     const uint32_t local_y = (zone16 >> 2u) & 0x3u; /* 4 rows per subcapture */
+    x = (local_x << 1u) | phase_x;
+    y = (local_y << 1u) | phase_y;
+#endif
 
-    const uint32_t x = (local_x << 1u) | phase_x;
-    const uint32_t y = (local_y << 1u) | phase_y;
     return (y * 8u) + x;
 }
 
@@ -887,7 +955,10 @@ static void tmf_fill_sparse_zones(uint16_t frame[64])
                 }
             }
 
-            if (count >= 3u)
+            /* Corners only have 3 neighbors; allow fill when at least two are valid
+             * to avoid persistent dead corner cells under close-range occlusion.
+             */
+            if (count >= 2u)
             {
                 frame[idx] = (uint16_t)(sum / count);
             }
@@ -1020,6 +1091,12 @@ bool tmf8828_quick_init(void)
            s_info.rev_id,
            s_buses[s_active_bus].name,
            s_active_addr);
+    PRINTF("TOF: map mode=%u remap=[%u,%u,%u,%u]\r\n",
+           (unsigned)TMF8828_ZONE_MAP_MODE,
+           (unsigned)(TMF8828_CAPTURE_REMAP_0 & 0x3u),
+           (unsigned)(TMF8828_CAPTURE_REMAP_1 & 0x3u),
+           (unsigned)(TMF8828_CAPTURE_REMAP_2 & 0x3u),
+           (unsigned)(TMF8828_CAPTURE_REMAP_3 & 0x3u));
 
     return true;
 }
@@ -1088,17 +1165,45 @@ bool tmf8828_quick_read_8x8(uint16_t out_mm[64], bool *out_complete)
     }
     else if (sequence != s_capture_sequence)
     {
-        /* Sequence increments frequently; keep accumulating captures until all 4 arrive. */
+        /* Start a new 8x8 assembly window when sequence id changes. */
         s_capture_sequence = sequence;
+        s_capture_mask = 0u;
+        s_sequence_updated_total = 0u;
     }
 
     uint32_t updated_zones = 0u;
     uint32_t zone_out = 0u;
+    uint16_t candidate_zone_mm[TMF8828_ZONE_COUNT_8X8];
+    uint8_t candidate_mode[TMF8828_ZONE_COUNT_8X8];
+    bool packet_any_signal = false;
+    bool suppress_empty_packet = false;
+    memset(candidate_zone_mm, 0, sizeof(candidate_zone_mm));
+    memset(candidate_mode, 0, sizeof(candidate_mode));
+#if TMF8828_PACKET_DIAG
+    uint32_t raw_slots_used = 0u;
+    uint32_t raw_slots_skipped = 0u;
+    uint32_t raw_valid_mm_samples = 0u;
+    uint16_t raw_min_mm = 0xFFFFu;
+    uint16_t raw_max_mm = 0u;
+    uint32_t conf_sum = 0u;
+    uint32_t conf_samples = 0u;
+    uint8_t conf_min = 0xFFu;
+    uint8_t conf_max = 0u;
+    uint32_t obj0_selected = 0u;
+    uint32_t obj1_selected = 0u;
+    uint32_t dual_obj_zones = 0u;
+    uint32_t dual_obj_split = 0u;
+    uint32_t range_glitch_reject = 0u;
+#endif
+
     for (uint32_t raw_idx = 0; raw_idx < TMF8828_OBJ_ENTRIES_RAW; raw_idx++)
     {
         /* In TMF8828 8x8 mode, raw object slots 8 and 17 are unused. */
         if (raw_idx == 8u || raw_idx == 17u)
         {
+#if TMF8828_PACKET_DIAG
+            raw_slots_skipped++;
+#endif
             continue;
         }
 
@@ -1107,76 +1212,209 @@ bool tmf8828_quick_read_8x8(uint16_t out_mm[64], bool *out_complete)
             break;
         }
 
+#if TMF8828_PACKET_DIAG
+        raw_slots_used++;
+#endif
+
         const uint32_t off = TMF8828_OBJ1_OFFSET + (raw_idx * TMF8828_OBJ_ENTRY_SIZE);
-        const uint32_t dst = tmf_zone_index_8x8(capture, zone_out);
-        /* v14 object layout per 3-byte record: confidence, distance_lsb, distance_msb. */
+        /* Object-entry layout used by current target firmware:
+         * confidence, distance_lsb, distance_msb.
+         */
         const uint8_t obj0_conf = frame[off + 0u];
         const uint16_t obj0_dist_raw = (uint16_t)frame[off + 1u] | ((uint16_t)frame[off + 2u] << 8);
         const uint8_t obj1_conf = frame[off + 3u];
         const uint16_t obj1_dist_raw = (uint16_t)frame[off + 4u] | ((uint16_t)frame[off + 5u] << 8);
+        if (obj0_conf > 0u || obj1_conf > 0u || obj0_dist_raw > 0u || obj1_dist_raw > 0u)
+        {
+            packet_any_signal = true;
+        }
 
         const uint16_t d0 = tmf_decode_distance_mm(frame[off + 1u], frame[off + 2u]);
         const uint16_t d1 = tmf_decode_distance_mm(frame[off + 4u], frame[off + 5u]);
         const bool d0_valid = (d0 > 0u && d0 < 12000u);
         const bool d1_valid = (d1 > 0u && d1 < 12000u);
 
-        uint16_t chosen = 0u;
-
-        if (d0_valid && d0 > 0u && obj0_conf >= TMF8828_MIN_CONFIDENCE)
+#if TMF8828_PACKET_DIAG
+        conf_sum += (uint32_t)obj0_conf + (uint32_t)obj1_conf;
+        conf_samples += 2u;
+        if (obj0_conf < conf_min)
         {
-            chosen = d0;
+            conf_min = obj0_conf;
         }
-        if (d1_valid && d1 > 0u && obj1_conf >= TMF8828_MIN_CONFIDENCE)
+        if (obj1_conf < conf_min)
         {
-            if (chosen == 0u || d1 < chosen)
+            conf_min = obj1_conf;
+        }
+        if (obj0_conf > conf_max)
+        {
+            conf_max = obj0_conf;
+        }
+        if (obj1_conf > conf_max)
+        {
+            conf_max = obj1_conf;
+        }
+
+        if (d0_valid)
+        {
+            raw_valid_mm_samples++;
+            if (d0 < raw_min_mm)
             {
-                chosen = d1;
+                raw_min_mm = d0;
+            }
+            if (d0 > raw_max_mm)
+            {
+                raw_max_mm = d0;
             }
         }
+        if (d1_valid)
+        {
+            raw_valid_mm_samples++;
+            if (d1 < raw_min_mm)
+            {
+                raw_min_mm = d1;
+            }
+            if (d1 > raw_max_mm)
+            {
+                raw_max_mm = d1;
+            }
+        }
+#endif
+
+        const bool obj0_ok = (d0_valid && d0 > 0u && obj0_conf >= TMF8828_MIN_CONFIDENCE);
+        const bool obj1_ok = (d1_valid && d1 > 0u && obj1_conf >= TMF8828_MIN_CONFIDENCE);
+        uint16_t chosen = 0u;
+        uint8_t chosen_obj = 0u;
+
+        if (obj0_ok && obj1_ok)
+        {
+#if TMF8828_PACKET_DIAG
+            dual_obj_zones++;
+            const uint16_t diff = (d0 > d1) ? (uint16_t)(d0 - d1) : (uint16_t)(d1 - d0);
+            if (diff >= TMF8828_DUAL_OBJ_SPLIT_MM)
+            {
+                dual_obj_split++;
+            }
+#endif
+#if (TMF8828_OBJECT_SELECT_POLICY == 0u)
+            if (d0 <= d1)
+            {
+                chosen = d0;
+                chosen_obj = 0u;
+            }
+            else
+            {
+                chosen = d1;
+                chosen_obj = 1u;
+            }
+#else
+            chosen = d0;
+            chosen_obj = 0u;
+#endif
+        }
+        else if (obj0_ok)
+        {
+            chosen = d0;
+            chosen_obj = 0u;
+        }
+#if (TMF8828_OBJECT_SELECT_POLICY != 2u)
+        else if (obj1_ok)
+        {
+            chosen = d1;
+            chosen_obj = 1u;
+        }
+#endif
+
+#if !TMF8828_PACKET_DIAG
+        (void)chosen_obj;
+#endif
 
         if (chosen > 0u)
         {
-            s_capture_mm[capture][zone_out] = chosen;
-            if (dst < 64u)
+            candidate_zone_mm[zone_out] = chosen;
+            candidate_mode[zone_out] = 1u;
+#if TMF8828_PACKET_DIAG
+            if (chosen_obj == 0u)
             {
-                s_last_frame_mm[dst] = chosen;
-                s_zone_invalid_streak[dst] = 0u;
-                updated_zones++;
+                obj0_selected++;
             }
+            else
+            {
+                obj1_selected++;
+            }
+#endif
         }
         else if (((obj0_dist_raw == 0u) && (obj0_conf > 0u)) ||
                  ((obj1_dist_raw == 0u) && (obj1_conf > 0u)))
         {
             /* Close saturation often reports 0mm with non-zero confidence. */
-            s_capture_mm[capture][zone_out] = TMF8828_TOO_CLOSE_MM;
-            if (dst < 64u)
-            {
-                s_last_frame_mm[dst] = TMF8828_TOO_CLOSE_MM;
-                s_zone_invalid_streak[dst] = 0u;
-                updated_zones++;
-            }
+            candidate_zone_mm[zone_out] = TMF8828_TOO_CLOSE_MM;
+            candidate_mode[zone_out] = 1u;
         }
         else
         {
-            s_capture_mm[capture][zone_out] = 0u;
-            if (dst < 64u)
-            {
-                if (s_last_frame_mm[dst] > 0u && s_zone_invalid_streak[dst] < TMF8828_ZONE_HOLD_FRAMES)
-                {
-                    s_zone_invalid_streak[dst]++;
-                }
-                else
-                {
-                    s_last_frame_mm[dst] = 0u;
-                    if (s_zone_invalid_streak[dst] < 255u)
-                    {
-                        s_zone_invalid_streak[dst]++;
-                    }
-                }
-            }
+            candidate_mode[zone_out] = 2u;
         }
 
         zone_out++;
+    }
+
+    if (!packet_any_signal && s_sequence_updated_total > 0u)
+    {
+        /* Occasionally a subcapture payload is all-zero while neighboring
+         * subcaptures in the same sequence are valid. Keep the last-good zones.
+         */
+        suppress_empty_packet = true;
+    }
+
+    for (uint32_t z = 0u; z < zone_out; z++)
+    {
+        const uint32_t dst = tmf_zone_index_8x8(capture, z);
+        if (dst >= 64u)
+        {
+            continue;
+        }
+
+        if (candidate_mode[z] == 1u)
+        {
+            uint16_t mm = candidate_zone_mm[z];
+#if TMF8828_RANGE_GLITCH_REJECT
+            const uint16_t prev = s_last_frame_mm[dst];
+            const bool mm_in_range = (mm >= TMF8828_EXPECTED_MIN_MM && mm <= TMF8828_EXPECTED_MAX_MM);
+            const bool prev_in_range = (prev >= TMF8828_EXPECTED_MIN_MM && prev <= TMF8828_EXPECTED_MAX_MM);
+            if (!mm_in_range && prev_in_range)
+            {
+#if TMF8828_PACKET_DIAG
+                range_glitch_reject++;
+#endif
+                continue;
+            }
+#endif
+            s_capture_mm[capture][z] = mm;
+            s_last_frame_mm[dst] = mm;
+            s_zone_invalid_streak[dst] = 0u;
+            updated_zones++;
+        }
+        else
+        {
+            s_capture_mm[capture][z] = 0u;
+            if (suppress_empty_packet)
+            {
+                continue;
+            }
+
+            if (s_last_frame_mm[dst] > 0u && s_zone_invalid_streak[dst] < TMF8828_ZONE_HOLD_FRAMES)
+            {
+                s_zone_invalid_streak[dst]++;
+            }
+            else
+            {
+                s_last_frame_mm[dst] = 0u;
+                if (s_zone_invalid_streak[dst] < 255u)
+                {
+                    s_zone_invalid_streak[dst]++;
+                }
+            }
+        }
     }
 
     if (s_sequence_updated_total <= (uint16_t)(0xFFFFu - updated_zones))
@@ -1196,12 +1434,65 @@ bool tmf8828_quick_read_8x8(uint16_t out_mm[64], bool *out_complete)
         s_capture_mask = 0u;
     }
 
+#if TMF8828_PACKET_DIAG
+    uint32_t valid_before_fill = 0u;
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        if (s_last_frame_mm[i] > 0u && s_last_frame_mm[i] < 12000u)
+        {
+            valid_before_fill++;
+        }
+    }
+#endif
+
     memcpy(out_mm, s_last_frame_mm, sizeof(s_last_frame_mm));
     if (updated_zones > 0u)
     {
         tmf_fill_sparse_zones(out_mm);
         memcpy(s_last_frame_mm, out_mm, sizeof(s_last_frame_mm));
     }
+
+#if TMF8828_PACKET_DIAG
+    uint32_t valid_after_fill = 0u;
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        if (out_mm[i] > 0u && out_mm[i] < 12000u)
+        {
+            valid_after_fill++;
+        }
+    }
+#endif
+
+#if TMF8828_PACKET_DIAG
+    const uint16_t diag_min_mm = (raw_valid_mm_samples > 0u) ? raw_min_mm : 0u;
+    const uint16_t diag_max_mm = (raw_valid_mm_samples > 0u) ? raw_max_mm : 0u;
+    const uint8_t diag_conf_min = (conf_samples > 0u) ? conf_min : 0u;
+    const uint8_t diag_conf_max = (conf_samples > 0u) ? conf_max : 0u;
+    const uint32_t diag_conf_avg =
+        (conf_samples > 0u) ? (uint32_t)((conf_sum + (conf_samples / 2u)) / conf_samples) : 0u;
+
+    PRINTF("TOF PKT r=%u s=%u c=%u ru=%u rs=%u vp=%u va=%u d=%u-%u cf=%u-%u/%u u=%u ob=%u/%u ds=%u/%u rg=%u%s%s\r\n",
+           (unsigned)result_number,
+           (unsigned)sequence,
+           (unsigned)capture,
+           (unsigned)raw_slots_used,
+           (unsigned)raw_slots_skipped,
+           (unsigned)valid_before_fill,
+           (unsigned)valid_after_fill,
+           (unsigned)diag_min_mm,
+           (unsigned)diag_max_mm,
+           (unsigned)diag_conf_min,
+           (unsigned)diag_conf_max,
+           (unsigned)diag_conf_avg,
+           (unsigned)updated_zones,
+           (unsigned)obj0_selected,
+           (unsigned)obj1_selected,
+           (unsigned)dual_obj_split,
+           (unsigned)dual_obj_zones,
+           (unsigned)range_glitch_reject,
+           complete_cycle ? " complete" : "",
+           suppress_empty_packet ? " drop0" : "");
+#endif
 
 #if TMF8828_TRACE_GRIDS
     uint32_t valid_zones = 0u;
@@ -1230,12 +1521,13 @@ bool tmf8828_quick_read_8x8(uint16_t out_mm[64], bool *out_complete)
            (unsigned)s_sequence_updated_total,
            complete_cycle ? " complete" : "");
 
+#endif
+
     if (complete_cycle)
     {
         s_grid_counter++;
         s_sequence_updated_total = 0u;
     }
-#endif
 
     if (out_complete)
     {

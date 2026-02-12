@@ -29,6 +29,12 @@ This repo now includes:
 - If TMF8828 data is unavailable, the demo shows an animated fallback pattern so the LCD path can still be verified.
 - Color mapping is RGB565 and scales near/far ranges into a blue-to-red heatmap.
 
+## Restore
+- Golden restore points: `docs/RESTORE_POINTS.md`
+- Pinned failsafe artifact: `docs/failsafe.md`
+- Failsafe flash command:
+  - `./tools/flash_failsafe.sh "$(sed -n '1p' docs/failsafe.md)"`
+
 ## Debug Port Checks (Recommended)
 FRDM-MCXN947 has a built-in MCU-Link debug port. Use it to verify ToF data
 presence first:
@@ -40,5 +46,7 @@ screen /dev/ttyACM0 115200
 ```
 
 Runtime interpretation:
-- `TOF demo: live 8x8 frames detected` and green top bar: live ToF stream is active
-- fallback messages and red top bar: display is running, but no valid live ToF frame stream
+- `TOF demo: live 8x8 frames detected`: live ToF stream is active
+- left column UI: top half is 8x8 grid, bottom half is compact runtime terminal
+- `LIVE:1` on the terminal means live frame flow; `LIVE:0` means stream gap/fallback state
+- `ACT:<mm>` and `RNG:50-150` report the effective measured distance and display lock range
