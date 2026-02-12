@@ -29,6 +29,16 @@ This repo now includes:
 - If TMF8828 data is unavailable, the demo shows an animated fallback pattern so the LCD path can still be verified.
 - Color mapping is RGB565 and scales near/far ranges into a blue-to-red heatmap.
 
+## AI Bootstrap (In Progress)
+- Firmware includes AI dataset logging scaffolding in `src/tof_demo.c`.
+- Enable CSV logging by building with:
+  - `TOF_AI_DATA_LOG_ENABLE=1`
+- Optional full 64-cell frame dump per sample:
+  - `TOF_AI_DATA_LOG_FULL_FRAME=1`
+- Log marker format:
+  - `AI_CSV,...` for compact feature rows
+  - `AI_F64,...` for full frame rows (when enabled)
+
 ## Restore
 - Golden restore points: `docs/RESTORE_POINTS.md`
 - Pinned failsafe artifact: `docs/failsafe.md`

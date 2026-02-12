@@ -40,6 +40,15 @@ If you see fallback markers instead:
 
 then live ToF data is not currently reaching the app pipeline.
 
+## AI Dataset Logging (Optional)
+Compile-time flags in `src/tof_demo.c`:
+- `TOF_AI_DATA_LOG_ENABLE` (`0` default)
+- `TOF_AI_DATA_LOG_FULL_FRAME` (`0` default)
+
+When enabled, UART emits:
+- `AI_CSV,...` compact feature rows
+- `AI_F64,...` full 64-cell rows (if full-frame flag enabled)
+
 ## Expected Binary
 - `mcuxsdk_ws/build/tof_demo_cm33_core0.bin`
 

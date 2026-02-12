@@ -13,7 +13,7 @@ Rules:
 ```bash
 cd /path/to/ToF__demo_NXP_FRDM-MCXN947
 git fetch --tags
-git checkout GOLDEN_2026-02-12_v2_spool_tube_segments23
+git checkout GOLDEN_2026-02-12_v3_tp_fast_persistent_ai_bootstrap
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh
@@ -43,6 +43,19 @@ git checkout GOLDEN_2026-02-12_v2_spool_tube_segments23
   - A colorful 3D spool tube is rendered across full segment 2+3 height.
   - Tube diameter is distance-driven and set to full roll when distance is `<=50 mm` or `>=100 mm`.
   - `docs/spool.png` is ignored and not tracked.
+- Failsafe artifact: see `docs/failsafe.md`.
+
+### 2026-02-12 Golden (Fast Persistent TP + AI Bootstrap)
+- Tag: `GOLDEN_2026-02-12_v3_tp_fast_persistent_ai_bootstrap`
+- Lock tag: `GOLDEN_LOCK_2026-02-12_v3_PENDING`
+- Commit: `PENDING`
+- Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
+- Behavior:
+  - TP roll + bargraph response path tuned for smoother `~100 ms` updates.
+  - Fixed enlarged brown core with variable white paper thickness.
+  - Bargraph white tick/marker artifacts removed.
+  - Persistent last-valid TP/bar state across short live gaps.
+  - AI data logging scaffold added in firmware (`TOF_AI_DATA_LOG_ENABLE`, `TOF_AI_DATA_LOG_FULL_FRAME`).
 - Failsafe artifact: see `docs/failsafe.md`.
 
 ## Template

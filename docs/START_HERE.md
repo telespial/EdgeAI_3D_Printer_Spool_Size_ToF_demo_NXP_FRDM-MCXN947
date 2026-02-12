@@ -6,4 +6,4 @@ Read in order:
 3. `README.md`
 
 Initial objective:
-- Bring up a buildable `tof_demo` baseline and confirm flash pipeline.
+- Maintain a restorable baseline and progress AI-based roll estimation.

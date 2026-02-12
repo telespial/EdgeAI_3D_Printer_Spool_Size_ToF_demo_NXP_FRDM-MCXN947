@@ -68,6 +68,9 @@
 #define TOF_DEBUG_UPDATE_TICKS ((TOF_DEBUG_UPDATE_TICKS_RAW > 0u) ? TOF_DEBUG_UPDATE_TICKS_RAW : 1u)
 #define TOF_MAX_DRAW_GAP_TICKS_RAW ((TOF_RESPONSE_TARGET_US + TOF_FRAME_US - 1u) / TOF_FRAME_US)
 #define TOF_MAX_DRAW_GAP_TICKS ((TOF_MAX_DRAW_GAP_TICKS_RAW > 0u) ? TOF_MAX_DRAW_GAP_TICKS_RAW : 1u)
+#define TOF_TP_UPDATE_US 100000u
+#define TOF_TP_UPDATE_TICKS_RAW ((TOF_TP_UPDATE_US + TOF_FRAME_US - 1u) / TOF_FRAME_US)
+#define TOF_TP_UPDATE_TICKS ((TOF_TP_UPDATE_TICKS_RAW > 0u) ? TOF_TP_UPDATE_TICKS_RAW : 1u)
 
 #define TOF_DBG_SCALE 2
 #define TOF_DBG_CHAR_W 3
@@ -78,7 +81,15 @@
 #define TOF_DBG_COLS 19u
 
 #define TOF_TP_MM_FULL_NEAR 50u
-#define TOF_TP_MM_FULL_FAR  100u
+#define TOF_TP_MM_EMPTY_FAR 100u
+
+#ifndef TOF_AI_DATA_LOG_ENABLE
+#define TOF_AI_DATA_LOG_ENABLE 0u
+#endif
+#ifndef TOF_AI_DATA_LOG_FULL_FRAME
+#define TOF_AI_DATA_LOG_FULL_FRAME 0u
+#endif
+#define TOF_AI_DATA_LOG_INTERVAL_TICKS TOF_TP_UPDATE_TICKS
 
 #define TOF_INPUT_MODE_LIVE          0u
 #define TOF_INPUT_MODE_SYNTH_FIXED   1u
@@ -142,7 +153,15 @@ static uint32_t s_dbg_last_tick = 0u;
 static bool s_tp_force_redraw = true;
 static uint32_t s_tp_last_tick = 0u;
 static uint16_t s_tp_last_outer_ry = 0u;
+static uint16_t s_tp_last_fullness_q10 = 0u;
+static uint32_t s_tp_mm_q8 = 0u;
 static bool s_tp_last_live = false;
+static bool s_tp_prev_rect_valid = false;
+static int16_t s_tp_prev_x0 = 0;
+static int16_t s_tp_prev_y0 = 0;
+static int16_t s_tp_prev_x1 = 0;
+static int16_t s_tp_prev_y1 = 0;
+static uint32_t s_ai_log_last_tick = 0u;
 
 static uint16_t s_range_near_mm = TOF_LOCKED_NEAR_MM;
 static uint16_t s_range_far_mm = TOF_LOCKED_FAR_MM;
@@ -501,6 +520,100 @@ static uint16_t tof_calc_actual_distance_mm(const uint16_t mm[64])
     return 0u;
 }
 
+static TOF_UNUSED void tof_ai_region_means(const uint16_t mm[64], uint16_t *center_avg, uint16_t *edge_avg)
+{
+    uint32_t center_sum = 0u;
+    uint32_t center_count = 0u;
+    uint32_t edge_sum = 0u;
+    uint32_t edge_count = 0u;
+
+    for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+    {
+        for (uint32_t x = 0u; x < TOF_GRID_W; x++)
+        {
+            const uint16_t v = mm[(y * TOF_GRID_W) + x];
+            if (!tof_mm_valid(v))
+            {
+                continue;
+            }
+
+            if ((x >= 2u && x <= 5u) && (y >= 2u && y <= 5u))
+            {
+                center_sum += v;
+                center_count++;
+            }
+
+            if (x == 0u || x == (TOF_GRID_W - 1u) || y == 0u || y == (TOF_GRID_H - 1u))
+            {
+                edge_sum += v;
+                edge_count++;
+            }
+        }
+    }
+
+    if (center_avg)
+    {
+        *center_avg = (center_count > 0u) ? (uint16_t)(center_sum / center_count) : 0u;
+    }
+    if (edge_avg)
+    {
+        *edge_avg = (edge_count > 0u) ? (uint16_t)(edge_sum / edge_count) : 0u;
+    }
+}
+
+static void tof_ai_log_frame(const uint16_t mm[64], bool live_data, uint32_t tick, uint32_t fullness_q10)
+{
+#if TOF_AI_DATA_LOG_ENABLE
+    if (!live_data)
+    {
+        return;
+    }
+
+    if ((uint32_t)(tick - s_ai_log_last_tick) < TOF_AI_DATA_LOG_INTERVAL_TICKS)
+    {
+        return;
+    }
+    s_ai_log_last_tick = tick;
+
+    uint32_t valid = 0u;
+    uint16_t min_mm = 0u;
+    uint16_t max_mm = 0u;
+    uint16_t avg_mm = 0u;
+    uint16_t center_avg = 0u;
+    uint16_t edge_avg = 0u;
+    const uint16_t actual_mm = tof_calc_actual_distance_mm(mm);
+
+    tof_calc_frame_stats(mm, &valid, &min_mm, &max_mm, &avg_mm);
+    tof_ai_region_means(mm, &center_avg, &edge_avg);
+
+    PRINTF("AI_CSV,t=%lu,live=%u,valid=%lu,min=%u,max=%u,avg=%u,act=%u,center=%u,edge=%u,full_q10=%lu\r\n",
+           (unsigned long)tick,
+           1u,
+           (unsigned long)valid,
+           (unsigned)min_mm,
+           (unsigned)max_mm,
+           (unsigned)avg_mm,
+           (unsigned)actual_mm,
+           (unsigned)center_avg,
+           (unsigned)edge_avg,
+           (unsigned long)fullness_q10);
+
+#if TOF_AI_DATA_LOG_FULL_FRAME
+    PRINTF("AI_F64,t=%lu", (unsigned long)tick);
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        PRINTF(",%u", (unsigned)mm[i]);
+    }
+    PRINTF("\r\n");
+#endif
+#else
+    (void)mm;
+    (void)live_data;
+    (void)tick;
+    (void)fullness_q10;
+#endif
+}
+
 static uint32_t tof_isqrt_u32(uint32_t n)
 {
     uint32_t op = n;
@@ -571,74 +684,257 @@ static void tof_draw_filled_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t 
     }
 }
 
-static uint32_t tof_tp_fullness_from_mm(uint16_t mm)
+static uint32_t tof_tp_fullness_q10_from_mm_q8(uint32_t mm_q8)
 {
-    if (mm == 0u)
+    if (mm_q8 == 0u)
     {
-        return 160u;
+        return 640u;
     }
 
-    if (mm <= TOF_TP_MM_FULL_NEAR || mm >= TOF_TP_MM_FULL_FAR)
+    const uint32_t near_q8 = ((uint32_t)TOF_TP_MM_FULL_NEAR << 8);
+    const uint32_t far_q8 = ((uint32_t)TOF_TP_MM_EMPTY_FAR << 8);
+
+    if (mm_q8 <= near_q8)
     {
-        return 255u;
+        return 1024u;
     }
 
-    const uint16_t mid = (uint16_t)((TOF_TP_MM_FULL_NEAR + TOF_TP_MM_FULL_FAR) / 2u);
-    const uint16_t span = (uint16_t)((TOF_TP_MM_FULL_FAR - TOF_TP_MM_FULL_NEAR) / 2u);
-    const uint16_t delta = (mm > mid) ? (uint16_t)(mm - mid) : (uint16_t)(mid - mm);
-    return 80u + (((uint32_t)delta * 175u) / (uint32_t)span);
+    if (mm_q8 >= far_q8)
+    {
+        return 0u;
+    }
+
+    return ((far_q8 - mm_q8) * 1024u) / (far_q8 - near_q8);
 }
 
-static uint16_t tof_tp_body_color(uint32_t t, bool live_data)
+static uint16_t tof_tp_bg_color(uint32_t t, bool live_data)
 {
-    const uint32_t r = live_data ? (26u + ((t * 120u) / 255u)) : (18u + ((t * 48u) / 255u));
-    const uint32_t g = live_data ? (72u + (((255u - t) * 96u) / 255u)) : (28u + (((255u - t) * 40u) / 255u));
-    const uint32_t b = live_data ? (120u + ((t * 96u) / 255u)) : (44u + ((t * 24u) / 255u));
+    uint32_t r = 8u + ((t * 12u) / 255u);
+    uint32_t g = 12u + ((t * 18u) / 255u);
+    uint32_t b = 20u + ((t * 28u) / 255u);
+    if (!live_data)
+    {
+        r = (r * 3u) / 4u;
+        g = (g * 3u) / 4u;
+        b = (b * 3u) / 4u;
+    }
     return pack_rgb565(r, g, b);
 }
 
-static uint16_t tof_tp_layer_color(uint32_t layer, uint32_t layers, bool live_data)
+static void tof_tp_fill_bg_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, bool live_data)
 {
-    const uint32_t t = (layers > 1u) ? ((layer * 255u) / (layers - 1u)) : 0u;
-    const uint32_t r = live_data ? (220u - (t / 3u)) : (120u - (t / 4u));
-    const uint32_t g = live_data ? (64u + ((t * 132u) / 255u)) : (56u + ((t * 64u) / 255u));
-    const uint32_t b = live_data ? (72u + (((255u - t) * 140u) / 255u)) : (64u + (((255u - t) * 64u) / 255u));
+    x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
+    x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
+    y0 = tof_clamp_i32(y0, TOF_TP_Y0, TOF_TP_Y1);
+    y1 = tof_clamp_i32(y1, TOF_TP_Y0, TOF_TP_Y1);
+    if (x1 < x0 || y1 < y0)
+    {
+        return;
+    }
+
+    const int32_t area_h = (TOF_TP_Y1 - TOF_TP_Y0) + 1;
+    const int32_t bands = 6;
+    for (int32_t band = 0; band < bands; band++)
+    {
+        const int32_t by0 = TOF_TP_Y0 + ((band * area_h) / bands);
+        int32_t by1 = TOF_TP_Y0 + (((band + 1) * area_h) / bands) - 1;
+        if (band == (bands - 1))
+        {
+            by1 = TOF_TP_Y1;
+        }
+
+        int32_t iy0 = (y0 > by0) ? y0 : by0;
+        int32_t iy1 = (y1 < by1) ? y1 : by1;
+        if (iy1 < iy0)
+        {
+            continue;
+        }
+
+        const uint32_t t = (uint32_t)((band * 255) / (bands - 1));
+        display_hal_fill_rect(x0, iy0, x1, iy1, tof_tp_bg_color(t, live_data));
+    }
+}
+
+static uint16_t tof_tp_paper_color(int32_t tone, bool live_data)
+{
+    tone = tof_clamp_i32(tone, 0, 255);
+    int32_t r = 176 + ((tone * 70) / 255);
+    int32_t g = 170 + ((tone * 68) / 255);
+    int32_t b = 156 + ((tone * 62) / 255);
+    if (!live_data)
+    {
+        r = (r * 3) / 4;
+        g = (g * 3) / 4;
+        b = (b * 3) / 4;
+    }
+    return pack_rgb565((uint32_t)r, (uint32_t)g, (uint32_t)b);
+}
+
+static uint16_t tof_tp_core_color(int32_t tone, bool live_data)
+{
+    tone = tof_clamp_i32(tone, 0, 255);
+    int32_t r = 90 + ((tone * 82) / 255);
+    int32_t g = 70 + ((tone * 64) / 255);
+    int32_t b = 46 + ((tone * 44) / 255);
+    if (!live_data)
+    {
+        r = (r * 3) / 4;
+        g = (g * 3) / 4;
+        b = (b * 3) / 4;
+    }
+    return pack_rgb565((uint32_t)r, (uint32_t)g, (uint32_t)b);
+}
+
+static void tof_draw_ellipse_ring(int32_t cx,
+                                  int32_t cy,
+                                  int32_t outer_rx,
+                                  int32_t outer_ry,
+                                  int32_t thickness,
+                                  uint16_t ring_color,
+                                  uint16_t fill_color)
+{
+    if (outer_rx <= 0 || outer_ry <= 0 || thickness <= 0)
+    {
+        return;
+    }
+
+    tof_draw_filled_ellipse(cx, cy, outer_rx, outer_ry, ring_color);
+    const int32_t inner_rx = outer_rx - thickness;
+    const int32_t inner_ry = outer_ry - thickness;
+    if (inner_rx > 0 && inner_ry > 0)
+    {
+        tof_draw_filled_ellipse(cx, cy, inner_rx, inner_ry, fill_color);
+    }
+}
+
+static uint16_t tof_tp_bar_color(uint32_t fullness_q10, bool live_data)
+{
+    if (fullness_q10 > 1024u)
+    {
+        fullness_q10 = 1024u;
+    }
+
+    const uint32_t full8 = ((fullness_q10 * 255u) + 512u) / 1024u;
+    uint32_t r = 24u + (((255u - full8) * 220u) / 255u);
+    uint32_t g = 24u + ((full8 * 220u) / 255u);
+    uint32_t b = 16u;
+    if (!live_data)
+    {
+        r = (r * 3u) / 4u;
+        g = (g * 3u) / 4u;
+    }
     return pack_rgb565(r, g, b);
+}
+
+static void tof_draw_fullness_bar(uint32_t fullness_q10, uint32_t mm_q8, bool live_data)
+{
+    const int32_t bar_margin_x = 12;
+    const int32_t bar_h = 18;
+    const int32_t bar_x0 = TOF_TP_X0 + bar_margin_x;
+    const int32_t bar_x1 = TOF_TP_X1 - bar_margin_x;
+    const int32_t bar_y1 = TOF_TP_Y1 - 8;
+    const int32_t bar_y0 = bar_y1 - bar_h;
+    if (bar_x1 <= bar_x0 || bar_y1 <= bar_y0)
+    {
+        return;
+    }
+
+    const uint16_t frame = pack_rgb565(40u, 46u, 52u);
+    const uint16_t tray = pack_rgb565(10u, 12u, 14u);
+    const uint16_t bg = pack_rgb565(28u, 20u, 18u);
+    display_hal_fill_rect(bar_x0, bar_y0, bar_x1, bar_y1, tray);
+    display_hal_fill_rect(bar_x0, bar_y0, bar_x1, bar_y0, frame);
+    display_hal_fill_rect(bar_x0, bar_y1, bar_x1, bar_y1, frame);
+    display_hal_fill_rect(bar_x0, bar_y0, bar_x0, bar_y1, frame);
+    display_hal_fill_rect(bar_x1, bar_y0, bar_x1, bar_y1, frame);
+
+    const int32_t ix0 = bar_x0 + 2;
+    const int32_t ix1 = bar_x1 - 2;
+    const int32_t iy0 = bar_y0 + 2;
+    const int32_t iy1 = bar_y1 - 2;
+    const int32_t iw = ix1 - ix0 + 1;
+    if (iw <= 0 || iy1 < iy0)
+    {
+        return;
+    }
+
+    display_hal_fill_rect(ix0, iy0, ix1, iy1, bg);
+    if (fullness_q10 > 1024u)
+    {
+        fullness_q10 = 1024u;
+    }
+
+    int32_t fill_w = (int32_t)(((fullness_q10 * (uint32_t)iw) + 512u) / 1024u);
+    if (fill_w > iw)
+    {
+        fill_w = iw;
+    }
+    if (fill_w > 0)
+    {
+        display_hal_fill_rect(ix0, iy0, ix0 + fill_w - 1, iy1, tof_tp_bar_color(fullness_q10, live_data));
+    }
+    (void)mm_q8;
 }
 
 static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32_t tick)
 {
-    if (!s_tp_force_redraw && (uint32_t)(tick - s_tp_last_tick) < TOF_DEBUG_UPDATE_TICKS)
+    if (!s_tp_force_redraw && (uint32_t)(tick - s_tp_last_tick) < TOF_TP_UPDATE_TICKS)
     {
         return;
     }
 
     const uint16_t actual_mm = tof_calc_actual_distance_mm(mm);
-    const uint32_t fullness = tof_tp_fullness_from_mm(actual_mm);
+    const uint32_t mm_q8 = (actual_mm > 0u) ? ((uint32_t)actual_mm << 8) : 0u;
+    if (mm_q8 > 0u)
+    {
+        if (s_tp_mm_q8 == 0u)
+        {
+            s_tp_mm_q8 = mm_q8;
+        }
+        else
+        {
+            /* Faster low-pass response for ~100ms roll/bar updates. */
+            s_tp_mm_q8 = ((s_tp_mm_q8 * 1u) + mm_q8 + 1u) / 2u;
+        }
+    }
+    /* Keep last valid distance persistent across live gaps. */
+
+    const uint32_t fullness_q10 = tof_tp_fullness_q10_from_mm_q8(s_tp_mm_q8);
 
     const int32_t area_w = (TOF_TP_X1 - TOF_TP_X0) + 1;
-    const int32_t area_h = (TOF_TP_Y1 - TOF_TP_Y0) + 1;
-    const int32_t outer_ry_min = 42;
-    int32_t outer_ry_max = (area_h / 2) - 10;
+    const int32_t bar_y1 = TOF_TP_Y1 - 8;
+    const int32_t bar_y0 = bar_y1 - 18;
+    const int32_t outer_ry_min = 52;
+    int32_t outer_ry_max = ((bar_y0 - TOF_TP_Y0) / 2) - 10;
+    outer_ry_max = tof_clamp_i32(outer_ry_max, outer_ry_min, 112);
     if (outer_ry_max < outer_ry_min)
     {
         outer_ry_max = outer_ry_min;
     }
 
-    const int32_t outer_ry = outer_ry_min + (int32_t)((fullness * (uint32_t)(outer_ry_max - outer_ry_min)) / 255u);
-    if (!s_tp_force_redraw && (uint16_t)outer_ry == s_tp_last_outer_ry && live_data == s_tp_last_live)
+    const int32_t outer_ry = outer_ry_min +
+        (int32_t)(((fullness_q10 * (uint32_t)(outer_ry_max - outer_ry_min)) + 512u) / 1024u);
+
+    const bool render_live = live_data || (s_tp_mm_q8 > 0u);
+    tof_ai_log_frame(mm, render_live, tick, fullness_q10);
+
+    if (!s_tp_force_redraw &&
+        render_live == s_tp_last_live &&
+        (uint16_t)outer_ry == s_tp_last_outer_ry &&
+        (uint16_t)fullness_q10 == s_tp_last_fullness_q10)
     {
         s_tp_last_tick = tick;
         return;
     }
 
-    const int32_t outer_rx = (outer_ry * 78) / 100;
-    const int32_t inner_ry = tof_clamp_i32((outer_ry * 36) / 100, 14, outer_ry - 6);
-    const int32_t inner_rx = (outer_rx * inner_ry) / outer_ry;
-    const int32_t hole_ry = tof_clamp_i32((inner_ry * 56) / 100, 8, inner_ry - 2);
-    const int32_t hole_rx = tof_clamp_i32((inner_rx * 56) / 100, 8, inner_rx - 2);
-    const int32_t depth = tof_clamp_i32(24 + (outer_ry / 4), 20, area_w / 4);
-    const int32_t cy = TOF_TP_Y0 + (area_h / 2);
+    const int32_t outer_rx = tof_clamp_i32((outer_ry * 76) / 100, 28, (area_w / 2) - 18);
+    const int32_t core_ry_nominal = 42;
+    const int32_t core_ry = tof_clamp_i32(core_ry_nominal, 12, outer_ry - 6);
+    const int32_t core_rx = tof_clamp_i32((core_ry * 76) / 100, 10, outer_rx - 8);
+    const int32_t hole_ry = tof_clamp_i32((core_ry * 64) / 100, 8, core_ry - 2);
+    const int32_t hole_rx = tof_clamp_i32((core_rx * 64) / 100, 8, core_rx - 2);
+    const int32_t depth = tof_clamp_i32(24 + (outer_rx / 2), 24, area_w / 3);
+    const int32_t cy = TOF_TP_Y0 + ((bar_y0 - TOF_TP_Y0) / 2);
     int32_t back_cx = TOF_TP_X0 + (area_w / 2) - (depth / 2);
     int32_t front_cx = back_cx + depth;
 
@@ -659,12 +955,45 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         front_cx -= shift;
     }
 
-    display_hal_fill_rect(TOF_TP_X0, TOF_TP_Y0, TOF_TP_X1, TOF_TP_Y1, pack_rgb565(7u, 9u, 18u));
+    int32_t roll_x0 = back_cx - outer_rx - 2;
+    int32_t roll_x1 = front_cx + outer_rx + (depth / 2) + 2;
+    int32_t roll_y0 = cy - outer_ry - 2;
+    int32_t roll_y1 = cy + outer_ry + 14;
 
-    for (int32_t y = -outer_ry; y <= outer_ry; y++)
+    if (s_tp_prev_rect_valid)
+    {
+        roll_x0 = (roll_x0 < s_tp_prev_x0) ? roll_x0 : s_tp_prev_x0;
+        roll_y0 = (roll_y0 < s_tp_prev_y0) ? roll_y0 : s_tp_prev_y0;
+        roll_x1 = (roll_x1 > s_tp_prev_x1) ? roll_x1 : s_tp_prev_x1;
+        roll_y1 = (roll_y1 > s_tp_prev_y1) ? roll_y1 : s_tp_prev_y1;
+    }
+    tof_tp_fill_bg_rect(roll_x0, roll_y0, roll_x1, roll_y1, render_live);
+
+    tof_draw_filled_ellipse(front_cx + (depth / 4),
+                            cy + outer_ry + 10,
+                            outer_rx + (depth / 2),
+                            tof_clamp_i32(outer_ry / 4, 6, 28),
+                            pack_rgb565(8u, 8u, 10u));
+    tof_draw_filled_ellipse(front_cx + (depth / 4),
+                            cy + outer_ry + 8,
+                            outer_rx + (depth / 3),
+                            tof_clamp_i32(outer_ry / 6, 4, 18),
+                            pack_rgb565(14u, 14u, 18u));
+
+    const uint16_t back_base = tof_tp_paper_color(98, render_live);
+    tof_draw_filled_ellipse(back_cx, cy, outer_rx, outer_ry, back_base);
+    tof_draw_ellipse_ring(back_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(72, render_live), back_base);
+    tof_draw_filled_ellipse(back_cx, cy, hole_rx, hole_ry, pack_rgb565(18u, 16u, 14u));
+
+    for (int32_t y = -outer_ry; y <= outer_ry; y += 3)
     {
         const int32_t py = cy + y;
-        if (py < TOF_TP_Y0 || py > TOF_TP_Y1)
+        int32_t py1 = py + 2;
+        if (py1 > TOF_TP_Y1)
+        {
+            py1 = TOF_TP_Y1;
+        }
+        if (py < TOF_TP_Y0 || py1 < TOF_TP_Y0 || py > TOF_TP_Y1)
         {
             continue;
         }
@@ -680,35 +1009,99 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
             continue;
         }
 
-        const uint32_t t = (uint32_t)(((int64_t)(y + outer_ry) * 255) / ((outer_ry * 2) + 1));
-        const uint16_t body_color = tof_tp_body_color(t, live_data);
-        display_hal_fill_rect(x0, py, x1, py, body_color);
+        const int32_t span = x1 - x0 + 1;
+        if (span <= 0)
+        {
+            continue;
+        }
+
+        const int32_t seam_1 = x0 + ((span * 22) / 100);
+        const int32_t seam_2 = x0 + ((span * 62) / 100);
+        const int32_t seam_3 = x0 + ((span * 82) / 100);
+        const int32_t tone_mid = 210 - ((y_abs * 56) / outer_ry);
+
+        const int32_t a0 = x0;
+        const int32_t a1 = tof_clamp_i32(seam_1, x0, x1);
+        const int32_t b0 = tof_clamp_i32(a1 + 1, x0, x1);
+        const int32_t b1 = tof_clamp_i32(seam_2, x0, x1);
+        const int32_t c0 = tof_clamp_i32(b1 + 1, x0, x1);
+        const int32_t c1 = tof_clamp_i32(seam_3, x0, x1);
+        const int32_t d0 = tof_clamp_i32(c1 + 1, x0, x1);
+        const int32_t d1 = x1;
+
+        if (a1 >= a0)
+        {
+            display_hal_fill_rect(a0, py, a1, py1, tof_tp_paper_color(tone_mid - 48, render_live));
+        }
+        if (b1 >= b0)
+        {
+            display_hal_fill_rect(b0, py, b1, py1, tof_tp_paper_color(tone_mid - 12, render_live));
+        }
+        if (c1 >= c0)
+        {
+            display_hal_fill_rect(c0, py, c1, py1, tof_tp_paper_color(tone_mid + 20, render_live));
+        }
+        if (d1 >= d0)
+        {
+            display_hal_fill_rect(d0, py, d1, py1, tof_tp_paper_color(tone_mid - 20, render_live));
+        }
+
+        if (((py - (cy - outer_ry)) % 8) == 0)
+        {
+            const int32_t lx0 = tof_clamp_i32(x0 + 4, x0, x1);
+            const int32_t lx1 = tof_clamp_i32(x1 - 4, x0, x1);
+            if (lx1 >= lx0)
+            {
+                display_hal_fill_rect(lx0, py, lx1, py1, tof_tp_paper_color(tone_mid - 20, render_live));
+            }
+        }
     }
 
-    tof_draw_filled_ellipse(back_cx, cy, outer_rx, outer_ry, pack_rgb565(64u, 50u, 42u));
+    const uint16_t front_base = tof_tp_paper_color(232, render_live);
+    tof_draw_filled_ellipse(front_cx, cy, outer_rx, outer_ry, front_base);
+    tof_draw_ellipse_ring(front_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(164, render_live), front_base);
 
-    const uint32_t layers = 8u;
-    for (uint32_t i = 0u; i < layers; i++)
+    const int32_t paper_span = tof_clamp_i32(outer_ry - core_ry, 1, 512);
+    for (int32_t ry_layer = outer_ry - 3; ry_layer > (core_ry + 2); ry_layer -= 6)
     {
-        const int32_t ry_layer = outer_ry - (int32_t)((i * (uint32_t)(outer_ry - inner_ry)) / (layers - 1u));
         const int32_t rx_layer = (outer_rx * ry_layer) / outer_ry;
-        const uint16_t layer_color = tof_tp_layer_color(i, layers, live_data);
-        tof_draw_filled_ellipse(front_cx, cy, rx_layer, ry_layer, layer_color);
+        const int32_t depth_px = outer_ry - ry_layer;
+        const int32_t tone = 230 - ((depth_px * 92) / paper_span);
+        tof_draw_ellipse_ring(front_cx, cy, rx_layer, ry_layer, 1, tof_tp_paper_color(tone, render_live), front_base);
     }
 
-    tof_draw_filled_ellipse(back_cx, cy, hole_rx, hole_ry, pack_rgb565(14u, 14u, 18u));
-    tof_draw_filled_ellipse(front_cx, cy, inner_rx, inner_ry, pack_rgb565(176u, 140u, 92u));
-    tof_draw_filled_ellipse(front_cx, cy, hole_rx, hole_ry, pack_rgb565(20u, 18u, 16u));
+    const uint16_t core_base = tof_tp_core_color(184, render_live);
+    tof_draw_filled_ellipse(front_cx, cy, core_rx, core_ry, core_base);
+    tof_draw_ellipse_ring(front_cx, cy, core_rx, core_ry, 2, tof_tp_core_color(118, render_live), core_base);
 
-    const int32_t hl_x0 = tof_clamp_i32(front_cx + (outer_rx / 3), TOF_TP_X0, TOF_TP_X1 - 2);
-    const int32_t hl_x1 = tof_clamp_i32(hl_x0 + 2, TOF_TP_X0, TOF_TP_X1);
-    const int32_t hl_y0 = tof_clamp_i32(cy - (outer_ry * 3 / 4), TOF_TP_Y0, TOF_TP_Y1);
-    const int32_t hl_y1 = tof_clamp_i32(cy + (outer_ry * 3 / 4), TOF_TP_Y0, TOF_TP_Y1);
-    display_hal_fill_rect(hl_x0, hl_y0, hl_x1, hl_y1, pack_rgb565(255u, 228u, 152u));
+    const int32_t core_span = tof_clamp_i32(core_ry - hole_ry, 1, 512);
+    for (int32_t ry_layer = core_ry - 2; ry_layer > (hole_ry + 1); ry_layer -= 5)
+    {
+        const int32_t rx_layer = (core_rx * ry_layer) / core_ry;
+        const int32_t depth_px = core_ry - ry_layer;
+        const int32_t tone = 176 - ((depth_px * 86) / core_span);
+        tof_draw_ellipse_ring(front_cx, cy, rx_layer, ry_layer, 1, tof_tp_core_color(tone, render_live), core_base);
+    }
+
+    tof_draw_filled_ellipse(front_cx, cy, hole_rx, hole_ry, pack_rgb565(24u, 22u, 20u));
+    tof_draw_filled_ellipse(front_cx + 1,
+                            cy - 1,
+                            tof_clamp_i32((hole_rx * 68) / 100, 4, hole_rx),
+                            tof_clamp_i32((hole_ry * 68) / 100, 4, hole_ry),
+                            pack_rgb565(11u, 11u, 13u));
+
+    tof_draw_fullness_bar(fullness_q10, s_tp_mm_q8, render_live);
+
+    s_tp_prev_x0 = (int16_t)tof_clamp_i32(back_cx - outer_rx - 2, TOF_TP_X0, TOF_TP_X1);
+    s_tp_prev_y0 = (int16_t)tof_clamp_i32(cy - outer_ry - 2, TOF_TP_Y0, TOF_TP_Y1);
+    s_tp_prev_x1 = (int16_t)tof_clamp_i32(front_cx + outer_rx + (depth / 2) + 2, TOF_TP_X0, TOF_TP_X1);
+    s_tp_prev_y1 = (int16_t)tof_clamp_i32(cy + outer_ry + 14, TOF_TP_Y0, TOF_TP_Y1);
+    s_tp_prev_rect_valid = true;
 
     s_tp_last_tick = tick;
     s_tp_last_outer_ry = (uint16_t)outer_ry;
-    s_tp_last_live = live_data;
+    s_tp_last_fullness_q10 = (uint16_t)fullness_q10;
+    s_tp_last_live = render_live;
     s_tp_force_redraw = false;
 }
 
@@ -871,7 +1264,15 @@ static void tof_ui_init(void)
     s_dbg_force_redraw = true;
     s_tp_last_tick = 0u;
     s_tp_last_outer_ry = 0u;
+    s_tp_last_fullness_q10 = 0u;
+    s_tp_mm_q8 = 0u;
     s_tp_last_live = false;
+    s_tp_prev_rect_valid = false;
+    s_tp_prev_x0 = 0;
+    s_tp_prev_y0 = 0;
+    s_tp_prev_x1 = 0;
+    s_tp_prev_y1 = 0;
+    s_ai_log_last_tick = 0u;
     s_tp_force_redraw = true;
 }
 

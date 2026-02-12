@@ -125,3 +125,17 @@ Observed behavior after patch sequence:
 
 Restore artifacts:
 - Golden and failsafe restore points are now tracked in `docs/RESTORE_POINTS.md` and `docs/failsafe.md`.
+
+## Update 2026-02-12 (TP Responsiveness + AI Bootstrap Kickoff)
+
+- TP roll and bargraph rendering path was optimized for lower latency and smoother persistence:
+  - local redraw region replacement instead of full segment repaint
+  - reduced draw density in body/ring passes to lower render cost
+  - retained target TP/bar update cadence around `100 ms`
+- Bargraph white tick/marker artifacts were removed.
+- Added AI data pipeline scaffolding in `src/tof_demo.c`:
+  - compile flags: `TOF_AI_DATA_LOG_ENABLE`, `TOF_AI_DATA_LOG_FULL_FRAME`
+  - new log rows:
+    - `AI_CSV` feature rows (valid/min/max/avg/actual/center/edge/fullness)
+    - `AI_F64` full 8x8 frame rows (optional)
+- This establishes the first firmware-side step for model training data capture while preserving current deterministic UI behavior.
