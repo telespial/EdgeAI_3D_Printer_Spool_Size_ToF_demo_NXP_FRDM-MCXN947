@@ -28,3 +28,17 @@ This repo now includes:
 ## Notes
 - If TMF8828 data is unavailable, the demo shows an animated fallback pattern so the LCD path can still be verified.
 - Color mapping is RGB565 and scales near/far ranges into a blue-to-red heatmap.
+
+## Debug Port Checks (Recommended)
+FRDM-MCXN947 has a built-in MCU-Link debug port. Use it to verify ToF data
+presence first:
+
+```bash
+LinkServer probe '#1' dapinfo
+ls -l /dev/serial/by-id
+screen /dev/ttyACM0 115200
+```
+
+Runtime interpretation:
+- `TOF demo: live 8x8 frames detected` and green top bar: live ToF stream is active
+- fallback messages and red top bar: display is running, but no valid live ToF frame stream

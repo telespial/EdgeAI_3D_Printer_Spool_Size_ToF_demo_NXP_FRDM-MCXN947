@@ -14,4 +14,5 @@ typedef struct
 
 bool tmf8828_quick_init(void);
 bool tmf8828_quick_get_info(tmf8828_info_t *out);
-bool tmf8828_quick_read_8x8(uint16_t out_mm[64]);
+bool tmf8828_quick_read_8x8(uint16_t out_mm[64], bool *out_complete);
+bool tmf8828_quick_restart_measurement(void);

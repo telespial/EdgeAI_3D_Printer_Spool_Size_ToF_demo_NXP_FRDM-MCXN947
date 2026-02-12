@@ -5,6 +5,14 @@
 - Display: LCD-PAR-S035 on J8 (FlexIO 8080)
 - ToF module: TMF8828_EVM_EB_SHIELD on host I2C path
 
+## Built-In Debug Port
+- Connector: FRDM-MCXN947 debug USB (MCU-Link, J17)
+- Features: SWD flash/debug + virtual COM port (UART logs)
+- Default console rate: `115200`
+
+Use this port to confirm whether live ToF data is actually present before
+debugging display-side behavior.
+
 ## Key Board Wiring
 - Debug UART: FLEXCOMM4
 - Project I2C path: FLEXCOMM3 (`P1_0` SDA, `P1_1` SCL)
