@@ -1,6 +1,6 @@
 # Build And Flash
 
-Current baseline tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
+Current baseline tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
 
 ## Prerequisites
 - Ubuntu toolchain bootstrap complete

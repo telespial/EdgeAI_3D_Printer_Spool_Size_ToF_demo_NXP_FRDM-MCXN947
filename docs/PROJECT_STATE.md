@@ -4,11 +4,11 @@ Last updated: 2026-02-13
 Project: `ToF__demo_NXP_FRDM-MCXN947`
 
 ## Current Baseline
-- Release baseline: v8
-- Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
-- Golden commit: `1dccefda89015f78831e244c709c8845282214a3`
-- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
+- Release baseline: v9
+- Golden tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
+- Golden commit: `<commit>`
+- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`
 - Lifecycle: active baseline checkpoint (popup-front + fixed-core render + readable brand font)
 
 ## Firmware Behavior (Current)
@@ -17,6 +17,10 @@ Project: `ToF__demo_NXP_FRDM-MCXN947`
 - spool model path is AI-mode invariant for state decisions.
 - Roll-state output constrained to 8-segment bargraph and four states (`FULL/MED/LOW/EMPTY`).
 - Empty detection uses MM hysteresis (`enter >=62`, `exit <=58`) plus sparse/no-surface fallback.
+- AI ON path applies confidence-weighted estimator fusion to `actual_mm` and fullness for improved runtime stability; AI OFF remains deterministic baseline path.
+- Debug terminal lines now end with:
+  - `AI:x A:mm`
+  - `CONF:%`
 - Alert runtime default is OFF at boot.
 - Full/sparse and empty/sparse overrides stabilize physical swaps.
 - Warning popup redraws as frontmost layer while active.

@@ -11,9 +11,9 @@ Read in order:
 8. `docs/ToDo.md`
 
 Current baseline:
-- Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
-- Failsafe: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
+- Golden tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
+- Failsafe: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`
 
 Primary objective:
 - Preserve a restorable baseline while improving roll-state robustness and calibration repeatability.

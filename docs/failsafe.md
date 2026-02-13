@@ -1,2 +1,2 @@
-failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf
-Last-resort firmware image for the v8 release with finalized readable brand font and preserved v7 TP detection/render behavior.
+failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf
+Last-resort firmware image for the v9 release with AI runtime assist fusion and final `AI`/`CONF` debug-line layout.

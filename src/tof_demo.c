@@ -149,6 +149,9 @@
 #define TOF_EST_FAR_MIN_MM 90u
 #define TOF_EST_FAR_MAX_MM 120u
 #define TOF_EST_MIN_GAP_MM 25u
+#define TOF_AI_FUSE_CONF_MIN_Q10 384u
+#define TOF_AI_FUSE_MM_WEIGHT_MAX_Q10 512u
+#define TOF_AI_FUSE_FULLNESS_WEIGHT_MAX_Q10 384u
 #define TOF_AI_GRID_ENABLE 1u
 #define TOF_AI_GRID_NEIGHBOR_MIN 2u
 #define TOF_AI_GRID_OUTLIER_MM_MIN 16u
@@ -2863,6 +2866,12 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     const uint16_t avg_mm = tof_apply_tp_mm_calibration(avg_mm_raw);
     s_tp_live_closest_mm = closest_mm;
 
+    if (s_ai_runtime_on)
+    {
+        /* Keep estimator hot only when AI mode is enabled so AI ON can improve stability. */
+        tof_estimator_update(calc_mm, live_data);
+    }
+
     const bool no_surface_signal = (closest_mm == 0u) && (curve_mm == 0u) && (avg_mm == 0u);
     const bool sparse_or_missing = (valid_count <= TOF_ROLL_EMPTY_SPARSE_VALID_MAX);
     const bool hard_empty_candidate =
@@ -2917,6 +2926,30 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     {
         actual_mm = TOF_TP_MM_FULL_NEAR;
     }
+
+    if (s_ai_runtime_on &&
+        live_data &&
+        !hard_empty_candidate &&
+        !full_sparse_candidate &&
+        (s_est_mm_q8 > 0u) &&
+        (s_est_conf_q10 >= TOF_AI_FUSE_CONF_MIN_Q10))
+    {
+        uint32_t w_mm = ((uint32_t)(s_est_conf_q10 - TOF_AI_FUSE_CONF_MIN_Q10) *
+                         TOF_AI_FUSE_MM_WEIGHT_MAX_Q10) /
+                        (1024u - TOF_AI_FUSE_CONF_MIN_Q10);
+        if (w_mm > TOF_AI_FUSE_MM_WEIGHT_MAX_Q10)
+        {
+            w_mm = TOF_AI_FUSE_MM_WEIGHT_MAX_Q10;
+        }
+
+        const uint16_t est_mm = tof_apply_tp_mm_calibration((uint16_t)(s_est_mm_q8 >> 8));
+        if (est_mm > 0u)
+        {
+            const uint32_t fused_mm =
+                (((uint32_t)actual_mm * (1024u - w_mm)) + ((uint32_t)est_mm * w_mm) + 512u) / 1024u;
+            actual_mm = (uint16_t)fused_mm;
+        }
+    }
     s_tp_live_actual_mm = actual_mm;
 
     bool snap_extreme = false;
@@ -2967,6 +3000,24 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     {
         fullness_q10 = 1024u;
     }
+    if (s_ai_runtime_on &&
+        live_data &&
+        !hard_empty_candidate &&
+        !full_sparse_candidate &&
+        (s_est_conf_q10 >= TOF_AI_FUSE_CONF_MIN_Q10))
+    {
+        uint32_t w_full = ((uint32_t)(s_est_conf_q10 - TOF_AI_FUSE_CONF_MIN_Q10) *
+                           TOF_AI_FUSE_FULLNESS_WEIGHT_MAX_Q10) /
+                          (1024u - TOF_AI_FUSE_CONF_MIN_Q10);
+        if (w_full > TOF_AI_FUSE_FULLNESS_WEIGHT_MAX_Q10)
+        {
+            w_full = TOF_AI_FUSE_FULLNESS_WEIGHT_MAX_Q10;
+        }
+        const uint32_t est_full = (s_est_fullness_q10 > 1024u) ? 1024u : s_est_fullness_q10;
+        fullness_q10 =
+            ((fullness_q10 * (1024u - w_full)) + (est_full * w_full) + 512u) / 1024u;
+    }
+
     uint32_t bar_fullness_q10 = fullness_q10;
     if (bar_fullness_q10 > 1024u)
     {
@@ -3219,11 +3270,9 @@ static void tof_update_debug_panel(const uint16_t mm[64],
     uint16_t actual_mm = 0u;
     uint16_t est_mm = (uint16_t)(s_tp_mm_q8 >> 8);
     uint16_t conf_q10 = s_est_conf_q10;
-    uint16_t spread_mm = s_est_spread_mm;
-    uint32_t est_valid = s_est_valid_count;
-    uint16_t grid_noise_mm = s_ai_grid_noise_mm;
     uint32_t full_q10 = s_roll_fullness_q10;
     uint16_t fullness_pct = (uint16_t)((full_q10 * 100u + 512u) / 1024u);
+    uint16_t conf_pct = (uint16_t)((((uint32_t)conf_q10 * 100u) + 512u) / 1024u);
     const uint16_t *calc_mm = tof_calc_metric_frame(mm, live_data);
     tof_calc_frame_stats(calc_mm, &valid, &min_mm, &max_mm, &avg_mm);
     uint16_t curve_mm = 0u;
@@ -3252,9 +3301,7 @@ static void tof_update_debug_panel(const uint16_t mm[64],
     if (!s_ai_runtime_on)
     {
         conf_q10 = 0u;
-        spread_mm = 0u;
-        est_valid = 0u;
-        grid_noise_mm = 0u;
+        conf_pct = 0u;
     }
 
     char line[TOF_DBG_COLS + 1u];
@@ -3279,16 +3326,14 @@ static void tof_update_debug_panel(const uint16_t mm[64],
              (unsigned)fullness_pct);
     tof_dbg_draw_line(3u, line, s_ui_dbg_dim);
 
-    snprintf(line, sizeof(line), "V:%lu SP:%u",
-             (unsigned long)est_valid,
-             (unsigned)spread_mm);
-    tof_dbg_draw_line(4u, line, s_ui_dbg_dim);
-
-    snprintf(line, sizeof(line), "AI:%u A:%u N:%u",
-             (unsigned)(s_ai_runtime_on ? 1u : 0u),
-             (unsigned)actual_mm,
-             (unsigned)grid_noise_mm);
+    snprintf(line, sizeof(line), "CONF:%u",
+             (unsigned)conf_pct);
     tof_dbg_draw_line(5u, line, s_ui_dbg_dim);
+
+    snprintf(line, sizeof(line), "AI:%u A:%u",
+             (unsigned)(s_ai_runtime_on ? 1u : 0u),
+             (unsigned)actual_mm);
+    tof_dbg_draw_line(4u, line, s_ui_dbg_dim);
 
     (void)stale_frames;
     (void)zero_live_frames;

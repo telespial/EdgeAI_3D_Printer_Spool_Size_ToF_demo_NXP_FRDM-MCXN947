@@ -13,7 +13,7 @@ Rules:
 ```bash
 cd /path/to/ToF__demo_NXP_FRDM-MCXN947
 git fetch --tags
-git checkout GOLDEN_2026-02-13_v8_brand_font_readable
+git checkout GOLDEN_2026-02-13_v9_ai_confline_runtime_assist
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh
@@ -127,6 +127,21 @@ git checkout GOLDEN_2026-02-13_v8_brand_font_readable
   - Preserves v7 TP detection/render baseline and popup layering behavior.
   - Finalized top-right brand rendering using a dedicated, more readable 5x7 text glyph set.
   - Brand text reduced to final readable size and kept on a single line: `(C)RICHARD HABERKERN`.
+- Failsafe artifact: see `docs/failsafe.md`.
+
+### 2026-02-13 Golden (AI Runtime Assist + CONF Debug Line)
+- Tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
+- Commit: `<commit>`
+- Status: `CURRENT BASELINE`
+- Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
+- Behavior:
+  - Adds AI ON confidence-weighted runtime fusion for TP `actual_mm` and fullness.
+  - Keeps deterministic safety overrides (`hard-empty`, `sparse-full`) as highest priority.
+  - Debug panel terminal tail changed to:
+    - `AI:x A:mm`
+    - `CONF:%`
+  - Preserves v8 readable brand font and v7 TP render/detection baseline.
 - Failsafe artifact: see `docs/failsafe.md`.
 
 ## Template

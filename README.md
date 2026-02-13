@@ -58,20 +58,44 @@ Main path in `src/tof_demo.c` (`tof_update_spool_model`):
 
 ## AI Usage and How AI Works Here
 
-This firmware uses two separate concepts:
+AI in this firmware has three concrete roles:
 
-1. `AI UI toggle`:
-- runtime touch toggle for AI-related visualization/logging mode.
-- does **not** change the core TP state path in the current baseline.
+1. `AI runtime assist (when AI is ON)`:
+- confidence-weighted fusion is applied to TP model distance (`actual_mm`) and fullness.
+- this uses estimator confidence and learned bounds to reduce jitter and improve transition stability.
+- safety overrides still win first (hard-empty and sparse-full rules are preserved).
 
-2. `AI data logging`:
-- UART telemetry for model/data analysis:
+2. `AI heatmap denoise path (when AI is ON)`:
+- spatial/temporal denoise and hold logic for the 8x8 grid.
+- used for cleaner live measurements in the UI and metric extraction path.
+
+3. `AI data logging / debug`:
+- UART telemetry for analysis:
   - `AI_CSV,...` compact per-frame features
   - `AI_F64,...` full 64-cell frame dumps
 
-Current baseline design goal:
-- TP classification path is AI-mode invariant for stable AI ON/OFF parity.
-- AI is used for data/analysis workflows, not as a hidden alternate classifier.
+Important boundary:
+- this is still a deterministic embedded pipeline, not a deployed neural-network classifier.
+- AI ON adds data-driven fusion and denoise behavior; AI OFF uses pure baseline deterministic path.
+
+## Roll-Size Training Data Workflow
+
+Roll-size datasets were captured from real hardware scenarios:
+- full roll
+- medium roll
+- low roll
+- empty tube
+- no roll
+
+How that data was used:
+- capture features and full-frame samples with `AI_CSV` and `AI_F64`.
+- compare AI ON/OFF behavior across the same physical states.
+- tune thresholds, hysteresis, sparse/full-empty overrides, and confidence fusion weights.
+- validate final mappings against the 8-segment bargraph and four user-visible states.
+
+How that data was **not** used:
+- no on-device ML training is running in production firmware.
+- no opaque model inference replaces the deterministic state machine.
 
 ## TP Roll Rendering Model (8 Renders)
 
@@ -130,6 +154,9 @@ Useful markers:
 - `AI_CSV,...`
 - `AI_F64,...` (when enabled)
 - `TOF AI: ON/OFF`
+- debug tail:
+  - `AI:<0|1> A:<mm>`
+  - `CONF:<confidence%>`
 
 ## Restore and Release Hygiene
 
@@ -148,6 +175,6 @@ Always use:
 
 ## Current Baseline
 
-- Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
-- Failsafe: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
+- Golden tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
+- Failsafe: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`

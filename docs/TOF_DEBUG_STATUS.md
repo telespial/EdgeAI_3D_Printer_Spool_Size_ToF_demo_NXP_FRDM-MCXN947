@@ -3,6 +3,18 @@
 Date: 2026-02-12
 Project: ToF__demo_NXP_FRDM-MCXN947
 
+## Update 2026-02-13 (v9 Golden AI Runtime Assist + CONF Line)
+
+- New baseline restore point published:
+  - `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
+  - `GOLDEN_LOCK_2026-02-13_v9_<commit>`
+  - failsafe image: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`
+- AI ON now applies confidence-weighted estimator fusion to TP decision/fullness path.
+- Deterministic safety overrides remain in force (`hard-empty` and `sparse-full`).
+- Debug terminal tail now ends with:
+  - `AI:x A:mm`
+  - `CONF:%`
+
 ## Update 2026-02-13 (v8 Golden Readable Brand Font Finalization)
 
 - New baseline restore point published:

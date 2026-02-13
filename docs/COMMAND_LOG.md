@@ -30,3 +30,8 @@ Format:
 - `2026-02-13` | `git tag` | PASS | Created `GOLDEN_2026-02-13_v8_brand_font_readable` and `GOLDEN_LOCK_2026-02-13_v8_1dccefd`.
 - `2026-02-13` | docs tag-pin update (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`) | PASS | Replaced v8 `<commit>` placeholders with exact lock/commit IDs.
 - `2026-02-13` | `git push origin main` + `git push origin GOLDEN_2026-02-13_v8_brand_font_readable GOLDEN_LOCK_2026-02-13_v8_1dccefd` | PASS | Published v8 release commits and restore tags to GitHub.
+- `2026-02-13` | code update (`src/tof_demo.c`) + `build` + `flash` | PASS | Added AI ON confidence-weighted estimator fusion for TP distance/fullness to improve runtime behavior while preserving AI OFF baseline path.
+- `2026-02-13` | code/docs update (`src/tof_demo.c`, `README.md`) + `build` + `flash` | PASS | Added AI confidence percent to terminal last line and expanded README AI/training-data workflow documentation.
+- `2026-02-13` | debug-panel line layout update (`src/tof_demo.c`) + `build` + `flash` | PASS | Moved confidence to final dedicated terminal line (`CONF:%`) and restored AI line to `AI:x A:mm`.
+- `2026-02-13` | `cp mcuxsdk_ws/build/tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf` | PASS | Published v9 failsafe artifact.
+- `2026-02-13` | docs baseline sync (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`, `BUILD_FLASH`, `OPS_RUNBOOK`, `failsafe.md`) | PASS | Prepared v9 golden/failsafe metadata and restore instructions.

@@ -1,10 +1,10 @@
 # Project Status
 
 - Name: ToF Demo (FRDM-MCXN947)
-- State: stable v8 baseline published with restore tags and failsafe image
+- State: stable v9 baseline published with restore tags and failsafe image
 - Last update: 2026-02-13
 
-## Current Working Baseline (v8)
+## Current Working Baseline (v9)
 - Build/flash path is stable via project-local scripts.
 - Live TMF8828 stream is stable with locked mapping:
   - `TMF8828_ZONE_MAP_MODE=1`
@@ -21,8 +21,12 @@
   - Q1 lower half: tiny runtime terminal (`LIVE`, `AVG`, `A`, confidence/noise fields)
   - right-side merged render area: TP roll + bargraph + status banner
 - State logic uses segment/hysteresis + sparse override rules in `src/tof_demo.c`.
-- v8 behavior updates:
+- v9 behavior updates:
   - AI on/off parity for state path (AI toggle no longer changes TP state input path)
+  - AI ON now adds confidence-weighted estimator fusion for `actual_mm` and fullness to improve stability/reactivity while preserving deterministic fallback rules.
+  - terminal debug tail now reports:
+    - `AI:x A:mm`
+    - `CONF:%`
   - hard-empty fallback on sparse/no-surface removal patterns
   - sparse-full override for close/full sparse-valid geometry
   - model updates continue while popup is visible (prevents freeze/stale lock)
@@ -32,14 +36,14 @@
 
 ## Last Run
 - Date: 2026-02-13
-- Result: PASS (build + flash + v7 golden/failsafe release packaging)
+- Result: PASS (build + flash + v9 golden/failsafe release packaging)
 - Build: `./tools/build_frdmmcxn947.sh debug`
 - Flash: `./tools/flash_frdmmcxn947.sh`
 
 ## Restore Baseline
 - Golden restore index: `docs/RESTORE_POINTS.md`
-- Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
+- Golden tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
 - Failsafe pointer: `docs/failsafe.md`
 - Failsafe flash command: `./tools/flash_failsafe.sh "$(sed -n '1p' docs/failsafe.md)"`
 
