@@ -119,8 +119,8 @@ git checkout GOLDEN_2026-02-13_v8_brand_font_readable
 
 ### 2026-02-13 Golden (Readable Brand Font Finalization)
 - Tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_<commit>`
-- Commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
+- Commit: `1dccefda89015f78831e244c709c8845282214a3`
 - Status: `CURRENT BASELINE`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:

@@ -12,7 +12,7 @@ Read in order:
 
 Current baseline:
 - Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
 - Failsafe: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
 
 Primary objective:

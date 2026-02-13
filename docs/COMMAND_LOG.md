@@ -26,3 +26,6 @@ Format:
 - `2026-02-13` | iterative `build` + `flash` for brand readability tuning | PASS | Refined top-right brand rendering to final one-line readable style.
 - `2026-02-13` | `cp mcuxsdk_ws/build/tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf` | PASS | Published v8 failsafe artifact.
 - `2026-02-13` | docs baseline sync (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`, `BUILD_FLASH`, `OPS_RUNBOOK`, `failsafe.md`) | PASS | Prepared v8 golden/failsafe metadata and restore instructions.
+- `2026-02-13` | `git commit` | PASS | Published v8 release payload commit `1dccefd`.
+- `2026-02-13` | `git tag` | PASS | Created `GOLDEN_2026-02-13_v8_brand_font_readable` and `GOLDEN_LOCK_2026-02-13_v8_1dccefd`.
+- `2026-02-13` | docs tag-pin update (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`) | PASS | Replaced v8 `<commit>` placeholders with exact lock/commit IDs.

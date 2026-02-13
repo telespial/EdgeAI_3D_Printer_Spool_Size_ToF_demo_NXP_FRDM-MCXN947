@@ -6,8 +6,8 @@ Project: `ToF__demo_NXP_FRDM-MCXN947`
 ## Current Baseline
 - Release baseline: v8
 - Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_<commit>`
-- Golden commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
+- Golden commit: `1dccefda89015f78831e244c709c8845282214a3`
 - Failsafe image: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
 - Lifecycle: active baseline checkpoint (popup-front + fixed-core render + readable brand font)
 

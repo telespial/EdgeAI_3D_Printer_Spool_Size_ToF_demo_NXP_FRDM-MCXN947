@@ -7,7 +7,7 @@ Project: ToF__demo_NXP_FRDM-MCXN947
 
 - New baseline restore point published:
   - `GOLDEN_2026-02-13_v8_brand_font_readable`
-  - `GOLDEN_LOCK_2026-02-13_v8_<commit>`
+  - `GOLDEN_LOCK_2026-02-13_v8_1dccefd`
   - failsafe image: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
 - Added a dedicated readable 5x7 brand glyph renderer for the top-right mark.
 - Finalized text style/size/spacing for one-line `(C)RICHARD HABERKERN`.
