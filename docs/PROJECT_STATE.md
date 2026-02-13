@@ -9,6 +9,7 @@ Project: `ToF__demo_NXP_FRDM-MCXN947`
 - Lock tag: `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
 - Golden commit: `920a5d8528a59bb328bcbc6f5b5b2692b7bb9843`
 - Failsafe image: `failsafe/FAILSAFE_2026-02-13_v5_full_reacquire_alertoff.elf`
+- Lifecycle: final update checkpoint (frozen for handoff)
 
 ## Firmware Behavior (Current)
 - 8x8 heatmap + tiny terminal in left column (Q1).
