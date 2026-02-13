@@ -131,8 +131,8 @@ git checkout GOLDEN_2026-02-13_v9_ai_confline_runtime_assist
 
 ### 2026-02-13 Golden (AI Runtime Assist + CONF Debug Line)
 - Tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
-- Commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_e7e2432`
+- Commit: `e7e243221aec08dfa62511b96aaed0bb9bb05b78`
 - Status: `CURRENT BASELINE`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:

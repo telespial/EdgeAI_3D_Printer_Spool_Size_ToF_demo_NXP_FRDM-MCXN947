@@ -176,5 +176,5 @@ Always use:
 ## Current Baseline
 
 - Golden tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_e7e2432`
 - Failsafe: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`

@@ -6,8 +6,8 @@ Project: `ToF__demo_NXP_FRDM-MCXN947`
 ## Current Baseline
 - Release baseline: v9
 - Golden tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_<commit>`
-- Golden commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_e7e2432`
+- Golden commit: `e7e243221aec08dfa62511b96aaed0bb9bb05b78`
 - Failsafe image: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`
 - Lifecycle: active baseline checkpoint (popup-front + fixed-core render + readable brand font)
 

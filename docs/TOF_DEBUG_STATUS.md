@@ -7,7 +7,7 @@ Project: ToF__demo_NXP_FRDM-MCXN947
 
 - New baseline restore point published:
   - `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
-  - `GOLDEN_LOCK_2026-02-13_v9_<commit>`
+  - `GOLDEN_LOCK_2026-02-13_v9_e7e2432`
   - failsafe image: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`
 - AI ON now applies confidence-weighted estimator fusion to TP decision/fullness path.
 - Deterministic safety overrides remain in force (`hard-empty` and `sparse-full`).

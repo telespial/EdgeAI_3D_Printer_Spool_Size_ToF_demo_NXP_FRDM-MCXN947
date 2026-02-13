@@ -35,3 +35,6 @@ Format:
 - `2026-02-13` | debug-panel line layout update (`src/tof_demo.c`) + `build` + `flash` | PASS | Moved confidence to final dedicated terminal line (`CONF:%`) and restored AI line to `AI:x A:mm`.
 - `2026-02-13` | `cp mcuxsdk_ws/build/tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf` | PASS | Published v9 failsafe artifact.
 - `2026-02-13` | docs baseline sync (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`, `BUILD_FLASH`, `OPS_RUNBOOK`, `failsafe.md`) | PASS | Prepared v9 golden/failsafe metadata and restore instructions.
+- `2026-02-13` | `git commit` | PASS | Published v9 release payload commit `e7e2432`.
+- `2026-02-13` | `git tag` | PASS | Created `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist` and `GOLDEN_LOCK_2026-02-13_v9_e7e2432`.
+- `2026-02-13` | docs tag-pin update (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`) | PASS | Replaced v9 `<commit>` placeholders with exact lock/commit IDs.
