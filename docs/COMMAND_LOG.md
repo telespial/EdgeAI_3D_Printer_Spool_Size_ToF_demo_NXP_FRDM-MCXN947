@@ -22,3 +22,4 @@ Format:
 - `2026-02-13` | `git commit` | PASS | Published v7 release payload commit `97aac50` (UI/render update + failsafe + docs sync).
 - `2026-02-13` | `git tag` | PASS | Created `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step` and `GOLDEN_LOCK_2026-02-13_v7_97aac50`.
 - `2026-02-13` | docs tag-pin update (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`) | PASS | Replaced v7 `<commit>` placeholders with exact lock/commit IDs.
+- `2026-02-13` | `git push origin main` + `git push origin GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step GOLDEN_LOCK_2026-02-13_v7_97aac50` | PASS | Published v7 release commits and restore tags to GitHub.
