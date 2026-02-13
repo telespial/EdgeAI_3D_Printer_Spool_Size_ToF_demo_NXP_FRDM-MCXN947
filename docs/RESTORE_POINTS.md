@@ -13,7 +13,7 @@ Rules:
 ```bash
 cd /path/to/ToF__demo_NXP_FRDM-MCXN947
 git fetch --tags
-git checkout GOLDEN_2026-02-12_v3_tp_fast_persistent_ai_bootstrap
+git checkout GOLDEN_2026-02-13_v4_mm35_65_calibrated_reset
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh
@@ -56,6 +56,22 @@ git checkout GOLDEN_2026-02-12_v3_tp_fast_persistent_ai_bootstrap
   - Bargraph white tick/marker artifacts removed.
   - Persistent last-valid TP/bar state across short live gaps.
   - AI data logging scaffold added in firmware (`TOF_AI_DATA_LOG_ENABLE`, `TOF_AI_DATA_LOG_FULL_FRAME`).
+- Failsafe artifact: see `docs/failsafe.md`.
+
+### 2026-02-13 Golden (35-65mm Calibrated Roll States + Reset Recovery)
+- Tag: `GOLDEN_2026-02-13_v4_mm35_65_calibrated_reset`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v4_d29464d`
+- Commit: `d29464da7ec1725b95cb2044b9be62544387657b`
+- Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
+- Behavior:
+  - Roll calibration mapped to physical thresholds:
+    - full at `<35 mm`
+    - empty at `>65 mm`
+  - Bargraph and TP roll geometry rescaled to match the same `35..65 mm` range.
+  - Roll state bands updated for consistent status transitions:
+    - full `<=35 mm`, medium `36..50 mm`, low `51..65 mm`, empty `>65 mm`.
+  - AI on/off path aligned with no extra AI-only distance bias.
+  - Empty-hold recovery improved so new-roll detection clears and rearms reliably.
 - Failsafe artifact: see `docs/failsafe.md`.
 
 ## Template

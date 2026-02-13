@@ -69,4 +69,4 @@
 ## Definition Of Done (AI Milestone)
 - [ ] AI estimation stable enough to replace direct distance mapping for TP/bar UI.
 - [ ] Dataset capture + training procedure documented and repeatable.
-- [ ] New golden + failsafe restore point created for first AI-enabled release.
+- [x] New golden + failsafe restore point created for first AI-enabled release.
