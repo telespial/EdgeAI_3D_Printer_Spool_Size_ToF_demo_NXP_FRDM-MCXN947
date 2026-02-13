@@ -89,8 +89,8 @@ git checkout GOLDEN_2026-02-13_v6_detection_rewrite_stable_states
 
 ### 2026-02-13 Golden (Detection Rewrite + Stable Four-State Output)
 - Tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
-- Commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_12d2789`
+- Commit: `12d27895319a5527e146ac65526baf9993f236cf`
 - Status: `CURRENT BASELINE`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:

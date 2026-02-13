@@ -7,7 +7,7 @@ Project: ToF__demo_NXP_FRDM-MCXN947
 
 - New baseline restore point published:
   - `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
-  - `GOLDEN_LOCK_2026-02-13_v6_<commit>`
+  - `GOLDEN_LOCK_2026-02-13_v6_12d2789`
   - failsafe image: `failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf`
 - TP measurement/detection path in `src/tof_demo.c` was rewritten.
 - Output model now targets:

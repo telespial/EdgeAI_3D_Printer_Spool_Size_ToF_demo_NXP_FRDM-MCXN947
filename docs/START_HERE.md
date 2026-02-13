@@ -12,7 +12,7 @@ Read in order:
 
 Current baseline:
 - Golden tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_12d2789`
 - Failsafe: `failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf`
 
 Primary objective:

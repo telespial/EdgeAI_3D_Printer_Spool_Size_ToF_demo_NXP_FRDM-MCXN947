@@ -15,3 +15,4 @@ Format:
 - `2026-02-13` | `cp mcuxsdk_ws/build/tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf` | PASS | Published v6 failsafe artifact.
 - `2026-02-13` | docs baseline sync (`START_HERE`, `PROJECT_STATE`, `STATUS`, `BUILD_FLASH`, `RESTORE_POINTS`, `failsafe.md`, `README`) | PASS | Updated v6 golden/failsafe metadata and restore procedures.
 - `2026-02-13` | `git commit` + `git tag` + `git push origin main --tags` | PASS | Published v6 golden release and lock tag.
+- `2026-02-13` | docs tag-pin update + `git push origin main` | PASS | Replaced v6 `<commit>` placeholders with exact lock/commit IDs in baseline docs.

@@ -6,8 +6,8 @@ Project: `ToF__demo_NXP_FRDM-MCXN947`
 ## Current Baseline
 - Release baseline: v6
 - Golden tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
-- Golden commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_12d2789`
+- Golden commit: `12d27895319a5527e146ac65526baf9993f236cf`
 - Failsafe image: `failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf`
 - Lifecycle: active baseline checkpoint (post-detection rewrite)
 
