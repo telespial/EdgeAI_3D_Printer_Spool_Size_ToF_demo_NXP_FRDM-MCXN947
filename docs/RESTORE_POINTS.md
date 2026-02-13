@@ -13,7 +13,7 @@ Rules:
 ```bash
 cd /path/to/ToF__demo_NXP_FRDM-MCXN947
 git fetch --tags
-git checkout GOLDEN_2026-02-13_v4_mm35_65_calibrated_reset
+git checkout GOLDEN_2026-02-13_v5_full_reacquire_alertoff
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh
@@ -72,6 +72,18 @@ git checkout GOLDEN_2026-02-13_v4_mm35_65_calibrated_reset
     - full `<=35 mm`, medium `36..50 mm`, low `51..65 mm`, empty `>65 mm`.
   - AI on/off path aligned with no extra AI-only distance bias.
   - Empty-hold recovery improved so new-roll detection clears and rearms reliably.
+- Failsafe artifact: see `docs/failsafe.md`.
+
+### 2026-02-13 Golden (Full-Roll Reacquire + Alert Default OFF)
+- Tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_<shortsha>`
+- Commit: `see tag`
+- Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
+- Behavior:
+  - Alert runtime default changed to OFF at boot/reset.
+  - TP model switched to closest-valid pixel for roll state decisions (not range-gated closest).
+  - Full-roll reacquire path hardened after medium/low transitions with wider capture + consensus windows.
+  - Bargraph/roll geometry and status derive from the same calibrated 35..60 mm mapping path.
 - Failsafe artifact: see `docs/failsafe.md`.
 
 ## Template

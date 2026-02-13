@@ -86,10 +86,11 @@
 #define TOF_DBG_COLS 19u
 
 #define TOF_TP_MM_FULL_NEAR 35u
-#define TOF_TP_MM_EMPTY_FAR 65u
+#define TOF_TP_MM_EMPTY_FAR 60u
 #define TOF_TP_MM_CLIP_MIN TOF_TP_MM_FULL_NEAR
 #define TOF_TP_MM_CLIP_MAX 120u
-#define TOF_TP_MM_SHIFT (-10)
+#define TOF_TP_MM_SHIFT (0)
+#define TOF_TP_MM_GAIN_Q8 256u /* 1.00x gain to preserve full->empty spread */
 #define TOF_AI_PILL_H 20
 #define TOF_AI_PILL_MARGIN_X 4
 #define TOF_AI_PILL_MARGIN_BOTTOM 4
@@ -108,11 +109,13 @@
 #define TOF_TP_STATUS_GAP_Y 6
 #define TOF_ROLL_MEDIUM_TRIGGER_MM TOF_TP_MM_FULL_NEAR
 #define TOF_ROLL_LOW_TRIGGER_MM 50u
-#define TOF_ROLL_EMPTY_TRIGGER_MM 65u
+#define TOF_ROLL_EMPTY_TRIGGER_MM 60u
+#define TOF_ROLL_MEDIUM_MIN_Q10 358u  /* 35% */
+#define TOF_ROLL_FULL_MIN_Q10 768u    /* 75% */
 #define TOF_AI_MODEL_MM_BIAS 0u
 #define TOF_ROLL_FULL_CAPTURE_MM (TOF_TP_MM_FULL_NEAR + 8u)
 #define TOF_ROLL_FULL_REARM_STREAK 2u
-#define TOF_TP_BAR_MM_EMPTY (TOF_ROLL_EMPTY_TRIGGER_MM + 1u)
+#define TOF_TP_BAR_MM_EMPTY TOF_ROLL_EMPTY_TRIGGER_MM
 #define TOF_TP_ROLL_REDRAW_MM_DELTA 2u
 #define TOF_TP_CURVE_ROWS_PICK 4u
 #define TOF_TP_CURVE_EDGE_GUARD_COLS 1u
@@ -265,7 +268,7 @@ static uint32_t s_est_valid_count = 0u;
 static uint16_t s_est_spread_mm = 0u;
 static uint16_t s_roll_fullness_q10 = 640u;
 static uint16_t s_roll_model_mm = 0u;
-static bool s_alert_runtime_on = true;
+static bool s_alert_runtime_on = false;
 static tof_roll_alert_level_t s_roll_alert_prev_level = kTofRollAlertFull;
 static bool s_roll_alert_prev_valid = false;
 static tof_roll_alert_level_t s_roll_status_prev_level = kTofRollAlertFull;
@@ -301,6 +304,7 @@ static uint16_t tof_tp_bg_color(uint32_t t, bool live_data);
 static void tof_tp_fill_bg_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, bool live_data);
 static void tof_draw_roll_status_banner(tof_roll_alert_level_t level, bool live_data);
 static void tof_ai_denoise_heatmap_frame(const uint16_t in_mm[64], uint16_t out_mm[64], bool live_data);
+static uint16_t tof_ai_grid_median_u16(uint16_t *values, uint32_t count);
 static void tof_tiny_draw_char_scaled_clipped(int32_t x,
                                               int32_t y,
                                               char ch,
@@ -660,21 +664,34 @@ static void tof_dbg_draw_line(uint32_t line_idx, const char *text, uint16_t colo
     }
 }
 
-static tof_roll_alert_level_t tof_roll_alert_level_from_model_mm(uint16_t mm)
+static tof_roll_alert_level_t tof_roll_alert_level_from_model_mm(uint16_t mm, uint32_t fullness_q10)
 {
-    if ((mm == 0u) || (mm <= TOF_ROLL_MEDIUM_TRIGGER_MM))
+    if (fullness_q10 > 1024u)
+    {
+        fullness_q10 = 1024u;
+    }
+
+    if (mm == 0u)
     {
         return kTofRollAlertFull;
     }
-    if (mm <= TOF_ROLL_LOW_TRIGGER_MM)
+
+    if (mm > TOF_ROLL_EMPTY_TRIGGER_MM)
+    {
+        return kTofRollAlertEmpty;
+    }
+
+    if (fullness_q10 >= TOF_ROLL_FULL_MIN_Q10)
+    {
+        return kTofRollAlertFull;
+    }
+
+    if (fullness_q10 >= TOF_ROLL_MEDIUM_MIN_Q10)
     {
         return kTofRollAlertMedium;
     }
-    if (mm <= TOF_ROLL_EMPTY_TRIGGER_MM)
-    {
-        return kTofRollAlertLow;
-    }
-    return kTofRollAlertEmpty;
+
+    return kTofRollAlertLow;
 }
 
 static void tof_roll_status_style(tof_roll_alert_level_t level,
@@ -1172,7 +1189,7 @@ static void tof_update_roll_alert_ui(uint32_t fullness_q10, bool live_data, uint
     {
         level_mm = s_tp_live_actual_mm;
     }
-    tof_roll_alert_level_t level = tof_roll_alert_level_from_model_mm(level_mm);
+    tof_roll_alert_level_t level = tof_roll_alert_level_from_model_mm(level_mm, fullness_q10);
 
     const bool warning_level = (level == kTofRollAlertLow) || (level == kTofRollAlertEmpty);
     const bool hard_empty_popup = (level == kTofRollAlertEmpty);
@@ -1597,6 +1614,25 @@ static uint16_t tof_calc_actual_distance_mm(const uint16_t mm[64])
     return 0u;
 }
 
+static uint16_t tof_calc_closest_valid_mm(const uint16_t mm[64])
+{
+    uint16_t closest = 0xFFFFu;
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        const uint16_t v = mm[i];
+        if (!tof_mm_valid(v))
+        {
+            continue;
+        }
+        if (v < closest)
+        {
+            closest = v;
+        }
+    }
+
+    return (closest == 0xFFFFu) ? 0u : closest;
+}
+
 static uint16_t tof_apply_tp_mm_shift(uint16_t mm)
 {
     if (mm == 0u)
@@ -1614,6 +1650,33 @@ static uint16_t tof_apply_tp_mm_shift(uint16_t mm)
         shifted = (int32_t)TOF_TP_MM_CLIP_MAX;
     }
     return (uint16_t)shifted;
+}
+
+static uint16_t tof_apply_tp_mm_gain(uint16_t mm)
+{
+    if (mm == 0u)
+    {
+        return 0u;
+    }
+
+    if (mm <= TOF_TP_MM_FULL_NEAR)
+    {
+        return mm;
+    }
+
+    const uint32_t delta = (uint32_t)(mm - TOF_TP_MM_FULL_NEAR);
+    uint32_t scaled = ((delta * TOF_TP_MM_GAIN_Q8) + 128u) >> 8;
+    uint32_t gained = (uint32_t)TOF_TP_MM_FULL_NEAR + scaled;
+    if (gained > TOF_TP_MM_CLIP_MAX)
+    {
+        gained = TOF_TP_MM_CLIP_MAX;
+    }
+    return (uint16_t)gained;
+}
+
+static uint16_t tof_apply_tp_mm_calibration(uint16_t mm)
+{
+    return tof_apply_tp_mm_gain(tof_apply_tp_mm_shift(mm));
 }
 
 static uint16_t tof_calc_roll_curve_distance_mm(const uint16_t mm[64], int16_t row_pick_idx_out[TOF_GRID_H])
@@ -2501,25 +2564,33 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     const uint16_t *calc_mm = tof_calc_metric_frame(mm, live_data);
     uint16_t avg_mm = 0u;
     tof_calc_frame_stats(calc_mm, NULL, NULL, NULL, &avg_mm);
-    uint16_t closest_mm = tof_calc_actual_distance_mm(calc_mm);
-    uint16_t curve_mm = 0u;
-    if (s_ai_runtime_on)
-    {
-        curve_mm = tof_calc_roll_curve_distance_mm(calc_mm, NULL);
-    }
-    s_tp_live_closest_mm = tof_apply_tp_mm_shift(closest_mm);
-    curve_mm = tof_apply_tp_mm_shift(curve_mm);
+    uint16_t closest_mm = tof_calc_closest_valid_mm(calc_mm);
+    const uint16_t curve_mm = tof_calc_roll_curve_distance_mm(calc_mm, NULL);
+    s_tp_live_closest_mm = tof_apply_tp_mm_calibration(closest_mm);
 
-    uint16_t state_mm = avg_mm;
-    if (curve_mm > 0u)
+    /* Roll radius should follow the nearest visible paper surface. Use closest
+     * as the primary metric and only blend in curve lightly for stability.
+     */
+    uint16_t state_mm = 0u;
+    if (closest_mm > 0u)
+    {
+        state_mm = closest_mm;
+        if (curve_mm > 0u)
+        {
+            uint32_t blended = ((uint32_t)closest_mm * 3u) + (uint32_t)curve_mm;
+            state_mm = (uint16_t)((blended + 2u) / 4u);
+        }
+    }
+    else if (curve_mm > 0u)
     {
         state_mm = curve_mm;
     }
-    else if (state_mm == 0u)
+    else if (avg_mm > 0u)
     {
-        state_mm = closest_mm;
+        state_mm = avg_mm;
     }
-    state_mm = tof_apply_tp_mm_shift(state_mm);
+
+    state_mm = tof_apply_tp_mm_calibration(state_mm);
     if (s_ai_runtime_on && (state_mm > 0u))
     {
         uint32_t biased_mm = (uint32_t)state_mm + (uint32_t)TOF_AI_MODEL_MM_BIAS;
@@ -2529,16 +2600,34 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         }
         state_mm = (uint16_t)biased_mm;
     }
+    const bool full_capture_candidate = (s_tp_live_closest_mm > 0u) &&
+                                        (s_tp_live_closest_mm <= TOF_ROLL_FULL_CAPTURE_MM);
+    const bool full_capture_consensus = (state_mm == 0u) ||
+                                        (state_mm <= (TOF_ROLL_FULL_CAPTURE_MM + 20u));
+    const bool full_capture_lock = full_capture_candidate && full_capture_consensus;
+
+    if (full_capture_lock &&
+        ((state_mm == 0u) || (state_mm > (s_tp_live_closest_mm + 2u))))
+    {
+        /* When closest sample indicates full-roll distance, prefer it so
+         * bar/state do not stick in medium from averaged far pixels.
+         */
+        state_mm = TOF_TP_MM_FULL_NEAR;
+    }
     s_tp_live_actual_mm = state_mm;
 
     uint16_t actual_mm = state_mm;
+    if (full_capture_lock &&
+        ((actual_mm == 0u) || ((s_tp_live_closest_mm + 4u) < actual_mm)))
+    {
+        actual_mm = TOF_TP_MM_FULL_NEAR;
+    }
     if (s_alert_popup_hold_empty &&
-        (s_tp_live_closest_mm > 0u) &&
-        (s_tp_live_closest_mm <= TOF_ROLL_FULL_CAPTURE_MM) &&
+        full_capture_candidate &&
         ((s_tp_live_closest_mm + 8u) < actual_mm))
     {
         /* Only use aggressive closest-pixel pull while recovering from EMPTY hold. */
-        actual_mm = s_tp_live_closest_mm;
+        actual_mm = TOF_TP_MM_FULL_NEAR;
     }
 
     bool snap_extreme = false;
@@ -2546,7 +2635,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     if (raw_mm_q8 > 0u)
     {
         uint16_t snap_mm = actual_mm;
-        snap_extreme = (snap_mm <= (TOF_TP_MM_FULL_NEAR + 2u)) ||
+        snap_extreme = (snap_mm <= TOF_ROLL_FULL_CAPTURE_MM) ||
                        (snap_mm > TOF_ROLL_EMPTY_TRIGGER_MM);
         if (s_tp_mm_q8 == 0u || snap_extreme)
         {
@@ -2565,6 +2654,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
             }
         }
     }
+    s_tp_live_actual_mm = actual_mm;
 
     uint32_t model_mm_q8 = s_tp_mm_q8;
 
@@ -2616,7 +2706,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         outer_ry_max = outer_ry_min;
     }
 
-    const uint16_t fullness_geom_q10 = (uint16_t)((((fullness_q10 + 16u) / 32u) * 32u));
+    const uint16_t fullness_geom_q10 = (uint16_t)((((fullness_q10 + 4u) / 8u) * 8u));
     const int32_t outer_ry = outer_ry_min +
         (int32_t)(((fullness_geom_q10 * (uint32_t)(outer_ry_max - outer_ry_min)) + 512u) / 1024u);
     const int32_t depth = tof_clamp_i32(14 + (outer_ry / 3), 14, 28);
@@ -2827,9 +2917,23 @@ static void tof_update_debug_panel(const uint16_t mm[64],
     {
         curve_mm = tof_calc_roll_curve_distance_mm(calc_mm, NULL);
     }
-    actual_mm = (curve_mm > 0u) ? curve_mm :
-                ((valid > 0u) ? avg_mm : tof_calc_actual_distance_mm(calc_mm));
-    actual_mm = tof_apply_tp_mm_shift(actual_mm);
+    uint16_t closest_mm = tof_calc_closest_valid_mm(calc_mm);
+    uint16_t actual_candidates[3];
+    uint32_t actual_count = 0u;
+    if (avg_mm > 0u)
+    {
+        actual_candidates[actual_count++] = avg_mm;
+    }
+    if (curve_mm > 0u)
+    {
+        actual_candidates[actual_count++] = curve_mm;
+    }
+    if (closest_mm > 0u)
+    {
+        actual_candidates[actual_count++] = closest_mm;
+    }
+    actual_mm = (actual_count > 0u) ? tof_ai_grid_median_u16(actual_candidates, actual_count) : 0u;
+    actual_mm = tof_apply_tp_mm_calibration(actual_mm);
 
     if (!s_ai_runtime_on)
     {
@@ -3033,7 +3137,7 @@ static void tof_ui_init(void)
     s_alert_pill_prev_valid = false;
     s_alert_pill_prev_on = true;
     s_ai_runtime_on = (TOF_AI_DATA_LOG_ENABLE != 0u);
-    s_alert_runtime_on = true;
+    s_alert_runtime_on = false;
     s_tp_last_tick = 0u;
     s_tp_last_outer_ry = 0u;
     s_tp_last_outer_rx = 0u;
@@ -3090,7 +3194,7 @@ static void tof_ai_grid_reset(void)
     s_ai_grid_noise_mm = 0u;
 }
 
-static uint16_t tof_ai_grid_median_u16(uint16_t values[9], uint32_t count)
+static uint16_t tof_ai_grid_median_u16(uint16_t *values, uint32_t count)
 {
     if (count == 0u)
     {
