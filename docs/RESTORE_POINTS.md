@@ -76,8 +76,8 @@ git checkout GOLDEN_2026-02-13_v5_full_reacquire_alertoff
 
 ### 2026-02-13 Golden (Full-Roll Reacquire + Alert Default OFF)
 - Tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_<shortsha>`
-- Commit: `see tag`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
+- Commit: `920a5d8528a59bb328bcbc6f5b5b2692b7bb9843`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:
   - Alert runtime default changed to OFF at boot/reset.
