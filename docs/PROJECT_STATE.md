@@ -4,21 +4,23 @@ Last updated: 2026-02-13
 Project: `ToF__demo_NXP_FRDM-MCXN947`
 
 ## Current Baseline
-- Release baseline: v6
-- Golden tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_12d2789`
-- Golden commit: `12d27895319a5527e146ac65526baf9993f236cf`
-- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf`
-- Lifecycle: active baseline checkpoint (post-detection rewrite)
+- Release baseline: v7
+- Golden tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_<commit>`
+- Golden commit: `<commit>`
+- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf`
+- Lifecycle: active baseline checkpoint (popup-front + fixed-core discrete render)
 
 ## Firmware Behavior (Current)
 - 8x8 heatmap + tiny terminal in left column (Q1).
 - spool roll render and bargraph across merged right-side area.
-- spool model path rewritten to be AI-mode invariant for state decisions.
+- spool model path is AI-mode invariant for state decisions.
 - Roll-state output constrained to 8-segment bargraph and four states (`FULL/MED/LOW/EMPTY`).
-- Empty detection has MM hysteresis (`enter >=62`, `exit <=58`) plus sparse/no-surface fallback.
+- Empty detection uses MM hysteresis (`enter >=62`, `exit <=58`) plus sparse/no-surface fallback.
 - Alert runtime default is OFF at boot.
-- Full/sparse and empty/sparse overrides added to stabilize physical swaps.
+- Full/sparse and empty/sparse overrides stabilize physical swaps.
+- Warning popup redraws as frontmost layer while active.
+- TP render uses fixed-size brown core and discrete 8-level white paper thickness.
 
 ## Runtime State Classification
 - State source: segment-based (`0..8`) with consensus/hysteresis.

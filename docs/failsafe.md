@@ -1,2 +1,2 @@
-failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf
-Last-resort firmware image for the v6 release with rewritten TP detection pipeline, 8-segment/four-state output, and improved sparse/full-empty transition stability.
+failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf
+Last-resort firmware image for the v7 release with frontmost warning popup layering, fixed-core 8-step TP render, and deterministic four-state detection path.

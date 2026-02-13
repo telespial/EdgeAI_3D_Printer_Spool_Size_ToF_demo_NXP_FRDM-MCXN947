@@ -324,6 +324,7 @@ static void tof_tp_status_rect(int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y
 static uint16_t tof_tp_bg_color(uint32_t t, bool live_data);
 static void tof_tp_fill_bg_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, bool live_data);
 static void tof_draw_roll_status_banner(tof_roll_alert_level_t level, bool live_data);
+static void tof_draw_brand_mark(void);
 static void tof_ai_denoise_heatmap_frame(const uint16_t in_mm[64], uint16_t out_mm[64], bool live_data);
 static uint16_t tof_ai_grid_median_u16(uint16_t *values, uint32_t count);
 static void tof_tiny_draw_char_scaled_clipped(int32_t x,
@@ -644,6 +645,62 @@ static void tof_tiny_draw_char_scaled_clipped(int32_t x,
 static void tof_dbg_draw_char(int32_t x, int32_t y, char ch, uint16_t color)
 {
     tof_tiny_draw_char_clipped(x, y, ch, color, s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y1);
+}
+
+static void tof_draw_brand_mark(void)
+{
+    static bool s_brand_drawn = false;
+    if (!s_tp_force_redraw && s_brand_drawn)
+    {
+        return;
+    }
+
+    const uint16_t fg = pack_rgb565(255u, 255u, 255u);
+    const char *name = "RICHARD HABERKERN";
+    const size_t n = strlen(name);
+    const int32_t scale = 1;
+    const int32_t char_adv = (TOF_DBG_CHAR_W * scale) + 1;
+    const int32_t text_w = (n > 0u) ? ((int32_t)(n * char_adv) - 1) : 0;
+    const int32_t text_h = TOF_DBG_CHAR_H * scale;
+    const int32_t copy_w = 9;
+    const int32_t gap = 3;
+    const int32_t margin = 4;
+    const int32_t mark_w = copy_w + gap + text_w;
+    const int32_t mark_h = text_h;
+
+    int32_t x1 = TOF_TP_X1 - margin;
+    int32_t y0 = TOF_TP_Y0 + margin;
+    int32_t x0 = x1 - mark_w + 1;
+    int32_t y1 = y0 + mark_h - 1;
+    x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
+    y0 = tof_clamp_i32(y0, TOF_TP_Y0, TOF_TP_Y1);
+    x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
+    y1 = tof_clamp_i32(y1, TOF_TP_Y0, TOF_TP_Y1);
+
+    const int32_t cx = x0 + 6;
+    const int32_t cy = y0 + (mark_h / 2);
+    for (int32_t yy = -3; yy <= 3; yy++)
+    {
+        for (int32_t xx = -3; xx <= 3; xx++)
+        {
+            const int32_t d2 = (xx * xx) + (yy * yy);
+            if (d2 >= 7 && d2 <= 12)
+            {
+                display_hal_fill_rect(cx + xx, cy + yy, cx + xx, cy + yy, fg);
+            }
+        }
+    }
+    tof_tiny_draw_char_scaled_clipped(cx - 1, cy - 2, 'C', fg, 1u, x0, y0, x1, y1);
+
+    int32_t tx = x0 + copy_w + gap;
+    const int32_t ty = y0;
+    for (size_t i = 0u; i < n; i++)
+    {
+        tof_tiny_draw_char_scaled_clipped(tx, ty, name[i], fg, 1u, x0, y0, x1, y1);
+        tx += char_adv;
+    }
+
+    s_brand_drawn = true;
 }
 
 static void tof_dbg_draw_line(uint32_t line_idx, const char *text, uint16_t color)
@@ -1433,12 +1490,8 @@ static void tof_update_roll_alert_ui(uint32_t fullness_q10, bool live_data, uint
 
     if (s_alert_popup_active)
     {
-        if (!s_alert_popup_prev_drawn ||
-            s_dbg_force_redraw ||
-            (s_alert_popup_prev_level != s_alert_popup_level))
-        {
-            tof_draw_roll_status_popup(live_data, s_alert_popup_level);
-        }
+        /* Keep popup topmost even while TP roll redraws underneath. */
+        tof_draw_roll_status_popup(live_data, s_alert_popup_level);
     }
     else if (s_alert_popup_prev_drawn)
     {
@@ -2897,20 +2950,20 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         outer_ry_max = outer_ry_min;
     }
 
-    const uint16_t fullness_geom_q10 = (uint16_t)((((fullness_q10 + 4u) / 8u) * 8u));
-    const int32_t outer_ry = outer_ry_min +
-        (int32_t)(((fullness_geom_q10 * (uint32_t)(outer_ry_max - outer_ry_min)) + 512u) / 1024u);
-    const int32_t depth = tof_clamp_i32(14 + (outer_ry / 3), 14, 28);
+    const uint8_t roll_segments = bar_segments;
+    const int32_t depth = tof_clamp_i32(14 + (outer_ry_max / 3), 14, 28);
     int32_t outer_rx_fit = ((area_w - depth) / 2) - 3;
     outer_rx_fit = tof_clamp_i32(outer_rx_fit, 32, 120);
-    int32_t outer_rx_min = (outer_rx_fit * 58) / 100;
-    outer_rx_min = tof_clamp_i32(outer_rx_min, 26, outer_rx_fit);
-    if (outer_rx_min > outer_rx_fit)
-    {
-        outer_rx_min = outer_rx_fit;
-    }
-    const int32_t outer_rx = outer_rx_min +
-        (int32_t)(((fullness_geom_q10 * (uint32_t)(outer_rx_fit - outer_rx_min)) + 512u) / 1024u);
+    const int32_t core_ry_fixed = tof_clamp_i32((outer_ry_max * 56) / 100, 18, outer_ry_max - 6);
+    const int32_t core_rx_fixed = tof_clamp_i32((outer_rx_fit * 56) / 100, 18, outer_rx_fit - 6);
+    const int32_t white_max_ry = tof_clamp_i32(outer_ry_max - core_ry_fixed, 0, outer_ry_max);
+    const int32_t white_max_rx = tof_clamp_i32(outer_rx_fit - core_rx_fixed, 0, outer_rx_fit);
+    const int32_t white_add_ry =
+        (int32_t)(((uint32_t)roll_segments * (uint32_t)white_max_ry + 4u) / TOF_ROLL_SEGMENT_COUNT);
+    const int32_t white_add_rx =
+        (int32_t)(((uint32_t)roll_segments * (uint32_t)white_max_rx + 4u) / TOF_ROLL_SEGMENT_COUNT);
+    const int32_t outer_ry = core_ry_fixed + white_add_ry;
+    const int32_t outer_rx = core_rx_fixed + white_add_rx;
 
     const bool render_live = live_data || (model_mm_q8 > 0u);
     tof_ai_log_frame(mm, render_live, tick, fullness_q10);
@@ -2941,8 +2994,9 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
 
     if (roll_changed)
     {
-        const int32_t core_ry = tof_clamp_i32((outer_ry * 56) / 100, 12, outer_ry - 8);
-        const int32_t core_rx = tof_clamp_i32((outer_rx * 56) / 100, 12, outer_rx - 8);
+        const bool has_paper = (roll_segments > 0u);
+        const int32_t core_ry = core_ry_fixed;
+        const int32_t core_rx = core_rx_fixed;
         const int32_t hole_ry = tof_clamp_i32((core_ry * 60) / 100, 7, core_ry - 3);
         const int32_t hole_rx = tof_clamp_i32((core_rx * 60) / 100, 7, core_rx - 3);
         const int32_t center_x = TOF_TP_X0 + (area_w / 2);
@@ -2977,44 +3031,59 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                                 tof_clamp_i32(outer_ry / 20, 2, 4),
                                 pack_rgb565(14u, 14u, 18u));
 
-        for (int32_t y = -outer_ry; y <= outer_ry; y += 2)
+        if (has_paper)
         {
-            const int32_t y_abs = (y < 0) ? -y : y;
-            const int32_t py = cy + y;
-            int32_t py1 = py + 1;
-            if (py1 > TOF_TP_Y1)
+            for (int32_t y = -outer_ry; y <= outer_ry; y += 2)
             {
-                py1 = TOF_TP_Y1;
-            }
-            if (py < TOF_TP_Y0 || py > TOF_TP_Y1)
-            {
-                continue;
-            }
+                const int32_t y_abs = (y < 0) ? -y : y;
+                const int32_t py = cy + y;
+                int32_t py1 = py + 1;
+                if (py1 > TOF_TP_Y1)
+                {
+                    py1 = TOF_TP_Y1;
+                }
+                if (py < TOF_TP_Y0 || py > TOF_TP_Y1)
+                {
+                    continue;
+                }
 
-            const int32_t xw = tof_ellipse_half_width(outer_rx, outer_ry, y_abs);
-            int32_t x0 = back_cx - xw + 1;
-            int32_t x1 = front_cx + xw - 1;
-            x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
-            x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
-            if (x1 < x0)
-            {
-                continue;
-            }
+                const int32_t xw = tof_ellipse_half_width(outer_rx, outer_ry, y_abs);
+                int32_t x0 = back_cx - xw + 1;
+                int32_t x1 = front_cx + xw - 1;
+                x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
+                x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
+                if (x1 < x0)
+                {
+                    continue;
+                }
 
-            const int32_t tone = 168 + (((outer_ry - y_abs) * 44) / tof_clamp_i32(outer_ry, 1, 1024));
-            display_hal_fill_rect(x0, py, x1, py1, tof_tp_paper_color(tone, render_live));
+                const int32_t tone = 168 + (((outer_ry - y_abs) * 44) / tof_clamp_i32(outer_ry, 1, 1024));
+                display_hal_fill_rect(x0, py, x1, py1, tof_tp_paper_color(tone, render_live));
+            }
         }
 
-        const uint16_t back_base = tof_tp_paper_color(110, render_live);
+        const uint16_t back_base = has_paper ? tof_tp_paper_color(110, render_live) : tof_tp_core_color(154, render_live);
         tof_draw_filled_ellipse(back_cx, cy, outer_rx, outer_ry, back_base);
-        tof_draw_ellipse_ring(back_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(84, render_live), back_base);
+        tof_draw_ellipse_ring(back_cx,
+                              cy,
+                              outer_rx,
+                              outer_ry,
+                              2,
+                              has_paper ? tof_tp_paper_color(84, render_live) : tof_tp_core_color(118, render_live),
+                              back_base);
         tof_draw_filled_ellipse(back_cx, cy, hole_rx, hole_ry, pack_rgb565(18u, 16u, 14u));
 
-        const uint16_t front_base = tof_tp_paper_color(232, render_live);
+        const uint16_t front_base = has_paper ? tof_tp_paper_color(232, render_live) : tof_tp_core_color(182, render_live);
         tof_draw_filled_ellipse(front_cx, cy, outer_rx, outer_ry, front_base);
-        tof_draw_ellipse_ring(front_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(168, render_live), front_base);
+        tof_draw_ellipse_ring(front_cx,
+                              cy,
+                              outer_rx,
+                              outer_ry,
+                              2,
+                              has_paper ? tof_tp_paper_color(168, render_live) : tof_tp_core_color(118, render_live),
+                              front_base);
 
-        for (int32_t i = 0; i < 4; i++)
+        for (int32_t i = 0; has_paper && i < 4; i++)
         {
             const int32_t ry_layer = outer_ry - 3 - (i * 5);
             if (ry_layer <= (core_ry + 2))
@@ -3054,6 +3123,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     {
         tof_draw_fullness_bar(bar_fullness_draw_q10, model_mm_q8, render_live);
     }
+    tof_draw_brand_mark();
 
     s_tp_last_tick = tick;
     s_tp_last_outer_ry = (uint16_t)outer_ry;

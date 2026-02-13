@@ -16,3 +16,6 @@ Format:
 - `2026-02-13` | docs baseline sync (`START_HERE`, `PROJECT_STATE`, `STATUS`, `BUILD_FLASH`, `RESTORE_POINTS`, `failsafe.md`, `README`) | PASS | Updated v6 golden/failsafe metadata and restore procedures.
 - `2026-02-13` | `git commit` + `git tag` + `git push origin main --tags` | PASS | Published v6 golden release and lock tag.
 - `2026-02-13` | docs tag-pin update + `git push origin main` | PASS | Replaced v6 `<commit>` placeholders with exact lock/commit IDs in baseline docs.
+- `2026-02-13` | `./tools/build_frdmmcxn947.sh debug` | PASS | Rebuilt v7 candidate after popup layering/fixed-core 8-step render and brand watermark updates.
+- `2026-02-13` | `cp mcuxsdk_ws/build/tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf` | PASS | Published v7 failsafe artifact.
+- `2026-02-13` | docs baseline sync (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`, `failsafe.md`) | PASS | Synced v7 golden/failsafe metadata and behavior notes.

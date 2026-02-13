@@ -1,6 +1,6 @@
 # Build And Flash
 
-Current baseline tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
+Current baseline tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
 
 ## Prerequisites
 - Ubuntu toolchain bootstrap complete

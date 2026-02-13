@@ -3,6 +3,22 @@
 Date: 2026-02-12
 Project: ToF__demo_NXP_FRDM-MCXN947
 
+## Update 2026-02-13 (v7 Golden Popup-Front + Fixed-Core 8-Step Render)
+
+- New baseline restore point published:
+  - `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
+  - `GOLDEN_LOCK_2026-02-13_v7_<commit>`
+  - failsafe image: `failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf`
+- Warning popup is forced to redraw as the frontmost layer while active.
+- TP roll render now uses:
+  - fixed-size brown core at every bar level
+  - discrete white-paper thickness in 8 levels (`0..8`)
+  - tube-only empty render at level `0`.
+- Added upper-right white brand watermark (`©Richard Haberkern` symbol + text).
+- Preserves v6 detection rewrite behavior:
+  - AI on/off parity for TP state decisions
+  - deterministic four-state output (`FULL`, `MEDIUM`, `LOW`, `EMPTY`).
+
 ## Update 2026-02-13 (v6 Golden Detection Rewrite)
 
 - New baseline restore point published:
