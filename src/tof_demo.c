@@ -584,9 +584,77 @@ static void tof_dbg_get_glyph(char ch, uint8_t rows[TOF_DBG_CHAR_H])
         case '.': rows[0] = 0x0; rows[1] = 0x0; rows[2] = 0x0; rows[3] = 0x0; rows[4] = 0x2; break;
         case '-': rows[0] = 0x0; rows[1] = 0x0; rows[2] = 0x7; rows[3] = 0x0; rows[4] = 0x0; break;
         case '/': rows[0] = 0x1; rows[1] = 0x1; rows[2] = 0x2; rows[3] = 0x4; rows[4] = 0x4; break;
+        case '(': rows[0] = 0x1; rows[1] = 0x2; rows[2] = 0x2; rows[3] = 0x2; rows[4] = 0x1; break;
+        case ')': rows[0] = 0x4; rows[1] = 0x2; rows[2] = 0x2; rows[3] = 0x2; rows[4] = 0x4; break;
         case '=': rows[0] = 0x0; rows[1] = 0x7; rows[2] = 0x0; rows[3] = 0x7; rows[4] = 0x0; break;
         case ' ': rows[0] = 0x0; rows[1] = 0x0; rows[2] = 0x0; rows[3] = 0x0; rows[4] = 0x0; break;
         default:  rows[0] = 0x7; rows[1] = 0x1; rows[2] = 0x2; rows[3] = 0x0; rows[4] = 0x2; break;
+    }
+}
+
+static void tof_brand_get_glyph_5x7(char ch, uint8_t rows[7])
+{
+    if (ch >= 'a' && ch <= 'z')
+    {
+        ch = (char)(ch - ('a' - 'A'));
+    }
+
+    switch (ch)
+    {
+        case 'A': rows[0] = 0x0E; rows[1] = 0x11; rows[2] = 0x11; rows[3] = 0x1F; rows[4] = 0x11; rows[5] = 0x11; rows[6] = 0x11; break;
+        case 'B': rows[0] = 0x1E; rows[1] = 0x11; rows[2] = 0x11; rows[3] = 0x1E; rows[4] = 0x11; rows[5] = 0x11; rows[6] = 0x1E; break;
+        case 'C': rows[0] = 0x0E; rows[1] = 0x11; rows[2] = 0x10; rows[3] = 0x10; rows[4] = 0x10; rows[5] = 0x11; rows[6] = 0x0E; break;
+        case 'D': rows[0] = 0x1E; rows[1] = 0x11; rows[2] = 0x11; rows[3] = 0x11; rows[4] = 0x11; rows[5] = 0x11; rows[6] = 0x1E; break;
+        case 'E': rows[0] = 0x1F; rows[1] = 0x10; rows[2] = 0x10; rows[3] = 0x1E; rows[4] = 0x10; rows[5] = 0x10; rows[6] = 0x1F; break;
+        case 'H': rows[0] = 0x11; rows[1] = 0x11; rows[2] = 0x11; rows[3] = 0x1F; rows[4] = 0x11; rows[5] = 0x11; rows[6] = 0x11; break;
+        case 'I': rows[0] = 0x1F; rows[1] = 0x04; rows[2] = 0x04; rows[3] = 0x04; rows[4] = 0x04; rows[5] = 0x04; rows[6] = 0x1F; break;
+        case 'K': rows[0] = 0x11; rows[1] = 0x12; rows[2] = 0x14; rows[3] = 0x18; rows[4] = 0x14; rows[5] = 0x12; rows[6] = 0x11; break;
+        case 'N': rows[0] = 0x11; rows[1] = 0x19; rows[2] = 0x15; rows[3] = 0x13; rows[4] = 0x11; rows[5] = 0x11; rows[6] = 0x11; break;
+        case 'O': rows[0] = 0x0E; rows[1] = 0x11; rows[2] = 0x11; rows[3] = 0x11; rows[4] = 0x11; rows[5] = 0x11; rows[6] = 0x0E; break;
+        case 'R': rows[0] = 0x1E; rows[1] = 0x11; rows[2] = 0x11; rows[3] = 0x1E; rows[4] = 0x14; rows[5] = 0x12; rows[6] = 0x11; break;
+        case '(': rows[0] = 0x02; rows[1] = 0x04; rows[2] = 0x08; rows[3] = 0x08; rows[4] = 0x08; rows[5] = 0x04; rows[6] = 0x02; break;
+        case ')': rows[0] = 0x08; rows[1] = 0x04; rows[2] = 0x02; rows[3] = 0x02; rows[4] = 0x02; rows[5] = 0x04; rows[6] = 0x08; break;
+        case ' ': rows[0] = 0x00; rows[1] = 0x00; rows[2] = 0x00; rows[3] = 0x00; rows[4] = 0x00; rows[5] = 0x00; rows[6] = 0x00; break;
+        default:  rows[0] = 0x1F; rows[1] = 0x01; rows[2] = 0x02; rows[3] = 0x04; rows[4] = 0x04; rows[5] = 0x00; rows[6] = 0x04; break;
+    }
+}
+
+static void tof_brand_draw_char5x7_scaled_clipped(int32_t x,
+                                                   int32_t y,
+                                                   char ch,
+                                                   uint16_t color,
+                                                   uint32_t scale,
+                                                   int32_t clip_x0,
+                                                   int32_t clip_y0,
+                                                   int32_t clip_x1,
+                                                   int32_t clip_y1)
+{
+    if (scale == 0u)
+    {
+        return;
+    }
+
+    uint8_t rows[7];
+    tof_brand_get_glyph_5x7(ch, rows);
+    for (uint32_t ry = 0u; ry < 7u; ry++)
+    {
+        for (uint32_t rx = 0u; rx < 5u; rx++)
+        {
+            if (((rows[ry] >> (4u - rx)) & 0x1u) == 0u)
+            {
+                continue;
+            }
+
+            const int32_t px0 = x + (int32_t)(rx * scale);
+            const int32_t py0 = y + (int32_t)(ry * scale);
+            const int32_t px1 = px0 + (int32_t)scale - 1;
+            const int32_t py1 = py0 + (int32_t)scale - 1;
+            if (px1 < clip_x0 || px0 > clip_x1 || py1 < clip_y0 || py0 > clip_y1)
+            {
+                continue;
+            }
+            display_hal_fill_rect(px0, py0, px1, py1, color);
+        }
     }
 }
 
@@ -656,16 +724,16 @@ static void tof_draw_brand_mark(void)
     }
 
     const uint16_t fg = pack_rgb565(255u, 255u, 255u);
-    const char *name = "RICHARD HABERKERN";
+    const char *name = "(C)RICHARD HABERKERN";
     const size_t n = strlen(name);
     const int32_t scale = 1;
-    const int32_t char_adv = (TOF_DBG_CHAR_W * scale) + 1;
+    const int32_t brand_char_w = 5;
+    const int32_t brand_char_h = 7;
+    const int32_t char_adv = (brand_char_w * scale) + 1;
     const int32_t text_w = (n > 0u) ? ((int32_t)(n * char_adv) - 1) : 0;
-    const int32_t text_h = TOF_DBG_CHAR_H * scale;
-    const int32_t copy_w = 9;
-    const int32_t gap = 3;
+    const int32_t text_h = brand_char_h * scale;
     const int32_t margin = 4;
-    const int32_t mark_w = copy_w + gap + text_w;
+    const int32_t mark_w = text_w;
     const int32_t mark_h = text_h;
 
     int32_t x1 = TOF_TP_X1 - margin;
@@ -677,26 +745,11 @@ static void tof_draw_brand_mark(void)
     x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
     y1 = tof_clamp_i32(y1, TOF_TP_Y0, TOF_TP_Y1);
 
-    const int32_t cx = x0 + 6;
-    const int32_t cy = y0 + (mark_h / 2);
-    for (int32_t yy = -3; yy <= 3; yy++)
-    {
-        for (int32_t xx = -3; xx <= 3; xx++)
-        {
-            const int32_t d2 = (xx * xx) + (yy * yy);
-            if (d2 >= 7 && d2 <= 12)
-            {
-                display_hal_fill_rect(cx + xx, cy + yy, cx + xx, cy + yy, fg);
-            }
-        }
-    }
-    tof_tiny_draw_char_scaled_clipped(cx - 1, cy - 2, 'C', fg, 1u, x0, y0, x1, y1);
-
-    int32_t tx = x0 + copy_w + gap;
+    int32_t tx = x0;
     const int32_t ty = y0;
     for (size_t i = 0u; i < n; i++)
     {
-        tof_tiny_draw_char_scaled_clipped(tx, ty, name[i], fg, 1u, x0, y0, x1, y1);
+        tof_brand_draw_char5x7_scaled_clipped(tx, ty, name[i], fg, (uint32_t)scale, x0, y0, x1, y1);
         tx += char_adv;
     }
 

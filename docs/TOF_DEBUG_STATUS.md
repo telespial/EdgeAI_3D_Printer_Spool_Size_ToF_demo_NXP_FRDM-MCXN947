@@ -3,6 +3,16 @@
 Date: 2026-02-12
 Project: ToF__demo_NXP_FRDM-MCXN947
 
+## Update 2026-02-13 (v8 Golden Readable Brand Font Finalization)
+
+- New baseline restore point published:
+  - `GOLDEN_2026-02-13_v8_brand_font_readable`
+  - `GOLDEN_LOCK_2026-02-13_v8_<commit>`
+  - failsafe image: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
+- Added a dedicated readable 5x7 brand glyph renderer for the top-right mark.
+- Finalized text style/size/spacing for one-line `(C)RICHARD HABERKERN`.
+- Preserves v7 TP state/render baseline behavior.
+
 ## Update 2026-02-13 (v7 Golden Popup-Front + Fixed-Core 8-Step Render)
 
 - New baseline restore point published:

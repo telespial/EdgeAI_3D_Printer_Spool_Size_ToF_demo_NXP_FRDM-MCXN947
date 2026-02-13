@@ -1,2 +1,2 @@
-failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf
-Last-resort firmware image for the v7 release with frontmost warning popup layering, fixed-core 8-step TP render, and deterministic four-state detection path.
+failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf
+Last-resort firmware image for the v8 release with finalized readable brand font and preserved v7 TP detection/render behavior.

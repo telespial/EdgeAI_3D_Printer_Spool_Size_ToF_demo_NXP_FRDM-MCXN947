@@ -27,7 +27,7 @@ Canonical operations for setup, build, flash, restore, and release tagging.
 ## Restore A Golden Baseline
 ```bash
 git fetch --tags
-git checkout GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step
+git checkout GOLDEN_2026-02-13_v8_brand_font_readable
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh

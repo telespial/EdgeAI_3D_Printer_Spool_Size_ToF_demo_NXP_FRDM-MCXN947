@@ -23,3 +23,6 @@ Format:
 - `2026-02-13` | `git tag` | PASS | Created `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step` and `GOLDEN_LOCK_2026-02-13_v7_97aac50`.
 - `2026-02-13` | docs tag-pin update (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`) | PASS | Replaced v7 `<commit>` placeholders with exact lock/commit IDs.
 - `2026-02-13` | `git push origin main` + `git push origin GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step GOLDEN_LOCK_2026-02-13_v7_97aac50` | PASS | Published v7 release commits and restore tags to GitHub.
+- `2026-02-13` | iterative `build` + `flash` for brand readability tuning | PASS | Refined top-right brand rendering to final one-line readable style.
+- `2026-02-13` | `cp mcuxsdk_ws/build/tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf` | PASS | Published v8 failsafe artifact.
+- `2026-02-13` | docs baseline sync (`README`, `STATUS`, `START_HERE`, `PROJECT_STATE`, `RESTORE_POINTS`, `TOF_DEBUG_STATUS`, `BUILD_FLASH`, `OPS_RUNBOOK`, `failsafe.md`) | PASS | Prepared v8 golden/failsafe metadata and restore instructions.

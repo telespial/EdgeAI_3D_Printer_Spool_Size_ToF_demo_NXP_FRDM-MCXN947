@@ -1,10 +1,10 @@
 # Project Status
 
 - Name: ToF Demo (FRDM-MCXN947)
-- State: stable v7 baseline published with restore tags and failsafe image
+- State: stable v8 baseline published with restore tags and failsafe image
 - Last update: 2026-02-13
 
-## Current Working Baseline (v7)
+## Current Working Baseline (v8)
 - Build/flash path is stable via project-local scripts.
 - Live TMF8828 stream is stable with locked mapping:
   - `TMF8828_ZONE_MAP_MODE=1`
@@ -21,14 +21,14 @@
   - Q1 lower half: tiny runtime terminal (`LIVE`, `AVG`, `A`, confidence/noise fields)
   - right-side merged render area: TP roll + bargraph + status banner
 - State logic uses segment/hysteresis + sparse override rules in `src/tof_demo.c`.
-- v7 behavior updates:
+- v8 behavior updates:
   - AI on/off parity for state path (AI toggle no longer changes TP state input path)
   - hard-empty fallback on sparse/no-surface removal patterns
   - sparse-full override for close/full sparse-valid geometry
   - model updates continue while popup is visible (prevents freeze/stale lock)
   - warning popup forced top layer while active
   - TP render now uses fixed brown core with 8 discrete white-paper thickness levels
-  - upper-right white branding watermark (`©Richard Haberkern`)
+  - upper-right white branding watermark rendered with readable one-line font (`(C)RICHARD HABERKERN`)
 
 ## Last Run
 - Date: 2026-02-13
@@ -38,8 +38,8 @@
 
 ## Restore Baseline
 - Golden restore index: `docs/RESTORE_POINTS.md`
-- Golden tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_97aac50`
+- Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_<commit>`
 - Failsafe pointer: `docs/failsafe.md`
 - Failsafe flash command: `./tools/flash_failsafe.sh "$(sed -n '1p' docs/failsafe.md)"`
 

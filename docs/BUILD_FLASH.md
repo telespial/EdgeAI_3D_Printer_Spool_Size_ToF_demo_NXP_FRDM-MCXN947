@@ -1,6 +1,6 @@
 # Build And Flash
 
-Current baseline tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
+Current baseline tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
 
 ## Prerequisites
 - Ubuntu toolchain bootstrap complete

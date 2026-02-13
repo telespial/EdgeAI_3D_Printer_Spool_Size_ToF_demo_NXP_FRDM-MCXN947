@@ -148,6 +148,6 @@ Always use:
 
 ## Current Baseline
 
-- Golden tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_97aac50`
-- Failsafe: `failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf`
+- Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_<commit>`
+- Failsafe: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`

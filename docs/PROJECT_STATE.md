@@ -4,12 +4,12 @@ Last updated: 2026-02-13
 Project: `ToF__demo_NXP_FRDM-MCXN947`
 
 ## Current Baseline
-- Release baseline: v7
-- Golden tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_97aac50`
-- Golden commit: `97aac50baf35caeb8da29a2973d08d2a2244959b`
-- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf`
-- Lifecycle: active baseline checkpoint (popup-front + fixed-core discrete render)
+- Release baseline: v8
+- Golden tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_<commit>`
+- Golden commit: `<commit>`
+- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v8_brand_font_readable.elf`
+- Lifecycle: active baseline checkpoint (popup-front + fixed-core render + readable brand font)
 
 ## Firmware Behavior (Current)
 - 8x8 heatmap + tiny terminal in left column (Q1).
@@ -21,6 +21,7 @@ Project: `ToF__demo_NXP_FRDM-MCXN947`
 - Full/sparse and empty/sparse overrides stabilize physical swaps.
 - Warning popup redraws as frontmost layer while active.
 - TP render uses fixed-size brown core and discrete 8-level white paper thickness.
+- Brand line uses one-line readable glyph set: `(C)RICHARD HABERKERN`.
 
 ## Runtime State Classification
 - State source: segment-based (`0..8`) with consensus/hysteresis.

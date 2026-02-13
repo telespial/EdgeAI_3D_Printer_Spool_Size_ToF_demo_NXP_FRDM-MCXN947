@@ -13,7 +13,7 @@ Rules:
 ```bash
 cd /path/to/ToF__demo_NXP_FRDM-MCXN947
 git fetch --tags
-git checkout GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step
+git checkout GOLDEN_2026-02-13_v8_brand_font_readable
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh
@@ -115,6 +115,18 @@ git checkout GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step
   - Empty level (`0`) renders brown tube only (no white paper).
   - Added upper-right white branding watermark `©Richard Haberkern`.
   - Preserves v6 detection rewrite (AI on/off parity path + deterministic four-state behavior).
+- Failsafe artifact: see `docs/failsafe.md`.
+
+### 2026-02-13 Golden (Readable Brand Font Finalization)
+- Tag: `GOLDEN_2026-02-13_v8_brand_font_readable`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v8_<commit>`
+- Commit: `<commit>`
+- Status: `CURRENT BASELINE`
+- Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
+- Behavior:
+  - Preserves v7 TP detection/render baseline and popup layering behavior.
+  - Finalized top-right brand rendering using a dedicated, more readable 5x7 text glyph set.
+  - Brand text reduced to final readable size and kept on a single line: `(C)RICHARD HABERKERN`.
 - Failsafe artifact: see `docs/failsafe.md`.
 
 ## Template
