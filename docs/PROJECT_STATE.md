@@ -6,8 +6,8 @@ Project: `ToF__demo_NXP_FRDM-MCXN947`
 ## Current Baseline
 - Release baseline: v7
 - Golden tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_<commit>`
-- Golden commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_97aac50`
+- Golden commit: `97aac50baf35caeb8da29a2973d08d2a2244959b`
 - Failsafe image: `failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf`
 - Lifecycle: active baseline checkpoint (popup-front + fixed-core discrete render)
 

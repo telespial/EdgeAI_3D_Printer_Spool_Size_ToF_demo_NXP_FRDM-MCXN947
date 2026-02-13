@@ -7,7 +7,7 @@ Project: ToF__demo_NXP_FRDM-MCXN947
 
 - New baseline restore point published:
   - `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
-  - `GOLDEN_LOCK_2026-02-13_v7_<commit>`
+  - `GOLDEN_LOCK_2026-02-13_v7_97aac50`
   - failsafe image: `failsafe/FAILSAFE_2026-02-13_v7_popup_front_fixedcore_8step.elf`
 - Warning popup is forced to redraw as the frontmost layer while active.
 - TP roll render now uses:

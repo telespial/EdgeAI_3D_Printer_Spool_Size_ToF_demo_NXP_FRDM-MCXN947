@@ -104,8 +104,8 @@ git checkout GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step
 
 ### 2026-02-13 Golden (Popup Front Layer + Fixed-Core 8-Step Render)
 - Tag: `GOLDEN_2026-02-13_v7_popup_front_fixedcore_8step`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_<commit>`
-- Commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v7_97aac50`
+- Commit: `97aac50baf35caeb8da29a2973d08d2a2244959b`
 - Status: `CURRENT BASELINE`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:
