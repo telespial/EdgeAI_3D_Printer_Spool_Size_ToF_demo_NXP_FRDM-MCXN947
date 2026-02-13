@@ -1221,7 +1221,7 @@ static void tof_draw_roll_status_popup(bool live_data, tof_roll_alert_level_t le
 
     if (two_line)
     {
-        const char *hint = (level == kTofRollAlertEmpty) ? "Replace spool To Reset" : NULL;
+        const char *hint = (level == kTofRollAlertEmpty) ? "Replace Spool To Reset" : NULL;
         const size_t hint_n = (hint != NULL) ? strlen(hint) : 0u;
         const int32_t avail_w = (ix1 - ix0 + 1) - 4;
         uint32_t title_scale = 4u;
@@ -1546,7 +1546,7 @@ static void tof_update_roll_alert_ui(uint32_t fullness_q10, bool live_data, uint
 
     if (s_alert_popup_active)
     {
-        /* Keep popup topmost even while TP roll redraws underneath. */
+        /* Keep popup topmost even while spool redraws underneath. */
         tof_draw_roll_status_popup(live_data, s_alert_popup_level);
     }
     else if (s_alert_popup_prev_drawn)

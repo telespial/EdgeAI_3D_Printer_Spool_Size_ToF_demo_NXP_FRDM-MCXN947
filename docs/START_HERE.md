@@ -6,14 +6,12 @@ Read in order:
 3. `docs/OPS_RUNBOOK.md`
 4. `docs/HARDWARE_SETUP.md`
 5. `docs/BUILD_FLASH.md`
-6. `docs/RESTORE_POINTS.md`
-7. `docs/COMMAND_LOG.md`
-8. `docs/ToDo.md`
+6. `docs/COMMAND_LOG.md`
+7. `docs/ToDo.md`
 
-Current baseline:
-- Golden tag: `GOLDEN_2026-02-13_v9_ai_confline_runtime_assist`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v9_e7e2432`
-- Failsafe: `failsafe/FAILSAFE_2026-02-13_v9_ai_confline_runtime_assist.elf`
+Current baseline policy:
+- restore-point tags are not maintained in this repository variant;
+- pinned failsafe artifacts are not maintained in this repository variant.
 
 Primary objective:
-- Preserve a restorable baseline while improving roll-state robustness and calibration repeatability.
+- maintain stable, testable 3D printer spool measurement behavior on target hardware.
