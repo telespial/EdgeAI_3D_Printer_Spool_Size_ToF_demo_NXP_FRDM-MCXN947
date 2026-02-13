@@ -3,6 +3,19 @@
 Date: 2026-02-12
 Project: ToF__demo_NXP_FRDM-MCXN947
 
+## Update 2026-02-13 (v6 Golden Detection Rewrite)
+
+- New baseline restore point published:
+  - `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
+  - `GOLDEN_LOCK_2026-02-13_v6_<commit>`
+  - failsafe image: `failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf`
+- TP measurement/detection path in `src/tof_demo.c` was rewritten.
+- Output model now targets:
+  - 8-segment bargraph
+  - four states only: `FULL`, `MEDIUM`, `LOW`, `EMPTY`
+- Empty-state hysteresis and sparse/full-empty fallback logic were added for removal/reinsert transitions.
+- TP state input path is now AI-mode invariant to reduce AI ON/OFF divergence.
+
 ## Update 2026-02-13 (v5 Golden Handoff)
 
 - New baseline restore point published:

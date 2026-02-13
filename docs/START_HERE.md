@@ -11,9 +11,9 @@ Read in order:
 8. `docs/ToDo.md`
 
 Current baseline:
-- Golden tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
-- Failsafe: `failsafe/FAILSAFE_2026-02-13_v5_full_reacquire_alertoff.elf`
+- Golden tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
+- Failsafe: `failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf`
 
 Primary objective:
 - Preserve a restorable baseline while improving roll-state robustness and calibration repeatability.

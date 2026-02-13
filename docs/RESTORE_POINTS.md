@@ -13,7 +13,7 @@ Rules:
 ```bash
 cd /path/to/ToF__demo_NXP_FRDM-MCXN947
 git fetch --tags
-git checkout GOLDEN_2026-02-13_v5_full_reacquire_alertoff
+git checkout GOLDEN_2026-02-13_v6_detection_rewrite_stable_states
 ./tools/setup_mcuxsdk_ws.sh
 ./tools/build_frdmmcxn947.sh debug
 ./tools/flash_frdmmcxn947.sh
@@ -85,6 +85,21 @@ git checkout GOLDEN_2026-02-13_v5_full_reacquire_alertoff
   - TP model switched to closest-valid pixel for roll state decisions (not range-gated closest).
   - Full-roll reacquire path hardened after medium/low transitions with wider capture + consensus windows.
   - Bargraph/roll geometry and status derive from the same calibrated 35..60 mm mapping path.
+- Failsafe artifact: see `docs/failsafe.md`.
+
+### 2026-02-13 Golden (Detection Rewrite + Stable Four-State Output)
+- Tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
+- Commit: `<commit>`
+- Status: `CURRENT BASELINE`
+- Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
+- Behavior:
+  - Rewrote TP measurement/detection pipeline in `src/tof_demo.c` for deterministic state behavior.
+  - Enforced 8-segment bargraph and four output states (`FULL`, `MEDIUM`, `LOW`, `EMPTY`).
+  - Added explicit sparse/full and sparse/empty fallback rules.
+  - Added empty-state hysteresis to reduce low/empty flapping.
+  - Removed AI-mode dependency from TP state input path to improve AI ON/OFF parity.
+  - Continued TP model updates while popup is visible to prevent stale/frozen state transitions.
 - Failsafe artifact: see `docs/failsafe.md`.
 
 ## Template

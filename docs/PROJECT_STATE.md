@@ -4,28 +4,28 @@ Last updated: 2026-02-13
 Project: `ToF__demo_NXP_FRDM-MCXN947`
 
 ## Current Baseline
-- Release baseline: v5
-- Golden tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
-- Golden commit: `920a5d8528a59bb328bcbc6f5b5b2692b7bb9843`
-- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v5_full_reacquire_alertoff.elf`
-- Lifecycle: final update checkpoint (frozen for handoff)
+- Release baseline: v6
+- Golden tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
+- Golden commit: `<commit>`
+- Failsafe image: `failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf`
+- Lifecycle: active baseline checkpoint (post-detection rewrite)
 
 ## Firmware Behavior (Current)
 - 8x8 heatmap + tiny terminal in left column (Q1).
 - spool roll render and bargraph across merged right-side area.
-- Roll calibration window:
-  - full anchor at `<=35 mm`
-  - empty threshold at `>60 mm`
+- spool model path rewritten to be AI-mode invariant for state decisions.
+- Roll-state output constrained to 8-segment bargraph and four states (`FULL/MED/LOW/EMPTY`).
+- Empty detection has MM hysteresis (`enter >=62`, `exit <=58`) plus sparse/no-surface fallback.
 - Alert runtime default is OFF at boot.
-- TP model uses closest-valid pixel path for roll state decisions.
-- Full-roll reacquire path widened after medium/low transitions.
+- Full/sparse and empty/sparse overrides added to stabilize physical swaps.
 
 ## Runtime State Classification
-- Empty: `model_mm > 60`
-- Full: fullness `>=75%`
-- Medium: fullness `35%..74%`
-- Low: fullness `<35%` and not empty
+- State source: segment-based (`0..8`) with consensus/hysteresis.
+- Empty: hard-empty conditions or state thresholds (`mm` + low segment) with hysteresis.
+- Full: segment `6..8` plus sparse-full override path.
+- Medium: segment `3..5`.
+- Low: segment `1..2`.
 
 ## Known Risk To Re-Verify
 - Repeated swap sequence (`full -> medium/low -> full`) should continue to re-lock to full after long test cycles.

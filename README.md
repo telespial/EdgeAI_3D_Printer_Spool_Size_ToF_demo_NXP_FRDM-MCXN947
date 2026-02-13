@@ -26,8 +26,8 @@ This repo now includes:
 4. `docs/HARDWARE_SETUP.md`
 
 ## Current Restore Baseline
-- Golden tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
+- Golden tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
 - Failsafe image pointer: `docs/failsafe.md`
 
 ## Key Paths

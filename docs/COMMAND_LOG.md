@@ -11,3 +11,7 @@ Format:
 - `2026-02-13` | docs compliance updates (`cat`, `apply_patch`) | PASS | Added runbook/state/log docs and synchronized `README`, `START_HERE`, `STATUS`, `ToDo`, and debug status for handoff.
 - `2026-02-13` | `git commit` + `git push origin main` | PASS | Published compliance/handoff documentation sync commit `8914dbe`.
 - `2026-02-13` | docs finalization update | PASS | Marked v5 golden restore point as `FINAL UPDATE` for handoff freeze.
+- `2026-02-13` | iterative `build` + `flash` during TP detection rewrite | PASS | Reworked TP measurement/state pipeline and validated on hardware with AI ON/OFF parity checks.
+- `2026-02-13` | `cp mcuxsdk_ws/build/tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-13_v6_detection_rewrite_stable_states.elf` | PASS | Published v6 failsafe artifact.
+- `2026-02-13` | docs baseline sync (`START_HERE`, `PROJECT_STATE`, `STATUS`, `BUILD_FLASH`, `RESTORE_POINTS`, `failsafe.md`, `README`) | PASS | Updated v6 golden/failsafe metadata and restore procedures.
+- `2026-02-13` | `git commit` + `git tag` + `git push origin main --tags` | PASS | Published v6 golden release and lock tag.

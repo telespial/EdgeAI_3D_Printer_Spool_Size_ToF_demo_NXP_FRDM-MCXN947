@@ -1,6 +1,6 @@
 # Build And Flash
 
-Current baseline tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
+Current baseline tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
 
 ## Prerequisites
 - Ubuntu toolchain bootstrap complete
@@ -44,8 +44,8 @@ then live ToF data is not currently reaching the app pipeline.
 
 ## AI Dataset Logging (Optional)
 Compile-time flags in `src/tof_demo.c`:
-- `TOF_AI_DATA_LOG_ENABLE` (`0` default)
-- `TOF_AI_DATA_LOG_FULL_FRAME` (`0` default)
+- `TOF_AI_DATA_LOG_ENABLE` (`1` in current debug baseline)
+- `TOF_AI_DATA_LOG_FULL_FRAME` (`1` in current debug baseline)
 
 When enabled, UART emits:
 - `AI_CSV,...` compact feature rows

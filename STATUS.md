@@ -1,41 +1,42 @@
 # Project Status
 
 - Name: ToF Demo (FRDM-MCXN947)
-- State: stable v5 baseline published with restore tags and failsafe image
+- State: stable v6 baseline published with restore tags and failsafe image
 - Last update: 2026-02-13
 
-## Current Working Baseline (v5)
+## Current Working Baseline (v6)
 - Build/flash path is stable via project-local scripts.
 - Live TMF8828 stream is stable with locked mapping:
   - `TMF8828_ZONE_MAP_MODE=1`
   - `TMF8828_CAPTURE_REMAP=[1,3,0,2]`
-- Roll calibration window currently used by UI:
-  - full anchor `<=35 mm`
-  - empty threshold `>60 mm`
+- Roll measurement/detection pipeline rewritten for deterministic state behavior.
+- Roll output model:
+  - 8-segment bargraph (`0..8`)
+  - four states only (`FULL`, `MEDIUM`, `LOW`, `EMPTY`)
+- Empty hysteresis active:
+  - enter empty at `>=62 mm` with low segment evidence
+  - exit empty below `58 mm`
 - UI layout:
   - Q1 upper half: 8x8 heatmap grid
   - Q1 lower half: tiny runtime terminal (`LIVE`, `AVG`, `A`, confidence/noise fields)
   - right-side merged render area: TP roll + bargraph + status banner
-- State logic:
-  - empty when model mm `>60`
-  - full when fullness `>=75%`
-  - medium when fullness `35..74%`
-  - low when fullness `<35%` and not empty
-- v5 behavior updates:
-  - alert default changed to OFF
-  - closest-valid pixel path used for TP roll state
-  - full-roll reacquire window widened for repeated roll-size swaps
+- State logic uses segment/hysteresis + sparse override rules in `src/tof_demo.c`.
+- v6 behavior updates:
+  - AI on/off parity for state path (AI toggle no longer changes TP state input path)
+  - hard-empty fallback on sparse/no-surface removal patterns
+  - sparse-full override for close/full sparse-valid geometry
+  - model updates continue while popup is visible (prevents freeze/stale lock)
 
 ## Last Run
 - Date: 2026-02-13
-- Result: PASS (build + flash + golden/failsafe release packaging)
+- Result: PASS (build + flash + v6 golden/failsafe release packaging)
 - Build: `./tools/build_frdmmcxn947.sh debug`
 - Flash: `./tools/flash_frdmmcxn947.sh`
 
 ## Restore Baseline
 - Golden restore index: `docs/RESTORE_POINTS.md`
-- Golden tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
-- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
+- Golden tag: `GOLDEN_2026-02-13_v6_detection_rewrite_stable_states`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v6_<commit>`
 - Failsafe pointer: `docs/failsafe.md`
 - Failsafe flash command: `./tools/flash_failsafe.sh "$(sed -n '1p' docs/failsafe.md)"`
 

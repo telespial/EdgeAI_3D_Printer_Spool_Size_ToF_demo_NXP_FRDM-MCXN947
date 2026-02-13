@@ -112,11 +112,28 @@
 #define TOF_ROLL_EMPTY_TRIGGER_MM 60u
 #define TOF_ROLL_MEDIUM_MIN_Q10 358u  /* 35% */
 #define TOF_ROLL_FULL_MIN_Q10 768u    /* 75% */
+#define TOF_ROLL_SEGMENT_COUNT 8u
+#define TOF_ROLL_SEG_MED_MIN 3u
+#define TOF_ROLL_SEG_FULL_MIN 6u
+#define TOF_ROLL_SEG_LOW_TO_MED_ENTER 3u
+#define TOF_ROLL_SEG_MED_TO_LOW_EXIT 2u
+#define TOF_ROLL_SEG_MED_TO_FULL_ENTER 7u
+#define TOF_ROLL_SEG_FULL_TO_MED_EXIT 5u
+#define TOF_ROLL_LEVEL_CONSENSUS_FRAMES 2u
 #define TOF_AI_MODEL_MM_BIAS 0u
 #define TOF_ROLL_FULL_CAPTURE_MM (TOF_TP_MM_FULL_NEAR + 8u)
 #define TOF_ROLL_FULL_REARM_STREAK 2u
 #define TOF_TP_BAR_MM_EMPTY TOF_ROLL_EMPTY_TRIGGER_MM
 #define TOF_TP_ROLL_REDRAW_MM_DELTA 2u
+#define TOF_ROLL_FULL_SPARSE_VALID_MAX 36u
+#define TOF_ROLL_FULL_SPARSE_AVG_MAX 90u
+#define TOF_TP_CLOSEST_OUTLIER_VALID_MAX 40u
+#define TOF_TP_CLOSEST_OUTLIER_AVG_MIN 90u
+#define TOF_ROLL_EMPTY_SPARSE_VALID_MAX 10u
+#define TOF_ROLL_EMPTY_FORCE_MM (TOF_ROLL_EMPTY_TRIGGER_MM + 8u)
+#define TOF_ROLL_EMPTY_SPARSE_AVG_MIN 70u
+#define TOF_ROLL_EMPTY_ENTER_MM 62u
+#define TOF_ROLL_EMPTY_EXIT_MM 58u
 #define TOF_TP_CURVE_ROWS_PICK 4u
 #define TOF_TP_CURVE_EDGE_GUARD_COLS 1u
 #define TOF_TP_CURVE_MIN_ROWS 4u
@@ -152,7 +169,7 @@
 #define TOF_AI_DATA_LOG_ENABLE 1u
 #endif
 #ifndef TOF_AI_DATA_LOG_FULL_FRAME
-#define TOF_AI_DATA_LOG_FULL_FRAME 0u
+#define TOF_AI_DATA_LOG_FULL_FRAME 1u
 #endif
 #define TOF_AI_DATA_LOG_INTERVAL_TICKS TOF_TP_UPDATE_TICKS
 
@@ -273,6 +290,10 @@ static tof_roll_alert_level_t s_roll_alert_prev_level = kTofRollAlertFull;
 static bool s_roll_alert_prev_valid = false;
 static tof_roll_alert_level_t s_roll_status_prev_level = kTofRollAlertFull;
 static bool s_roll_status_prev_valid = false;
+static tof_roll_alert_level_t s_roll_level_stable = kTofRollAlertFull;
+static bool s_roll_level_stable_valid = false;
+static tof_roll_alert_level_t s_roll_level_candidate = kTofRollAlertFull;
+static uint8_t s_roll_level_candidate_count = 0u;
 static bool s_roll_status_prev_live = false;
 static bool s_alert_popup_active = false;
 static bool s_alert_popup_prev_drawn = false;
@@ -664,11 +685,29 @@ static void tof_dbg_draw_line(uint32_t line_idx, const char *text, uint16_t colo
     }
 }
 
-static tof_roll_alert_level_t tof_roll_alert_level_from_model_mm(uint16_t mm, uint32_t fullness_q10)
+static uint8_t tof_roll_segments_from_fullness_q10(uint32_t fullness_q10)
 {
     if (fullness_q10 > 1024u)
     {
         fullness_q10 = 1024u;
+    }
+
+    uint32_t seg = (fullness_q10 + 64u) / 128u;
+    if (seg > TOF_ROLL_SEGMENT_COUNT)
+    {
+        seg = TOF_ROLL_SEGMENT_COUNT;
+    }
+    return (uint8_t)seg;
+}
+
+static tof_roll_alert_level_t tof_roll_alert_level_from_mm_segments(uint16_t mm,
+                                                                     uint8_t segments,
+                                                                     tof_roll_alert_level_t prev,
+                                                                     bool prev_valid)
+{
+    if (segments > TOF_ROLL_SEGMENT_COUNT)
+    {
+        segments = TOF_ROLL_SEGMENT_COUNT;
     }
 
     if (mm == 0u)
@@ -676,22 +715,87 @@ static tof_roll_alert_level_t tof_roll_alert_level_from_model_mm(uint16_t mm, ui
         return kTofRollAlertFull;
     }
 
-    if (mm > TOF_ROLL_EMPTY_TRIGGER_MM)
+    if (segments == 0u)
     {
         return kTofRollAlertEmpty;
     }
 
-    if (fullness_q10 >= TOF_ROLL_FULL_MIN_Q10)
+    if (prev_valid && prev == kTofRollAlertEmpty)
     {
-        return kTofRollAlertFull;
+        if ((mm > TOF_ROLL_EMPTY_EXIT_MM) || (segments == 0u))
+        {
+            return kTofRollAlertEmpty;
+        }
+    }
+    else
+    {
+        if ((mm >= TOF_ROLL_EMPTY_ENTER_MM) && (segments <= 1u))
+        {
+            return kTofRollAlertEmpty;
+        }
     }
 
-    if (fullness_q10 >= TOF_ROLL_MEDIUM_MIN_Q10)
+    if (!prev_valid)
     {
-        return kTofRollAlertMedium;
+        if (segments >= TOF_ROLL_SEG_FULL_MIN)
+        {
+            return kTofRollAlertFull;
+        }
+        if (segments >= TOF_ROLL_SEG_MED_MIN)
+        {
+            return kTofRollAlertMedium;
+        }
+        return kTofRollAlertLow;
     }
 
-    return kTofRollAlertLow;
+    switch (prev)
+    {
+        case kTofRollAlertFull:
+            if (segments >= TOF_ROLL_SEG_FULL_TO_MED_EXIT)
+            {
+                return kTofRollAlertFull;
+            }
+            if (segments >= TOF_ROLL_SEG_MED_MIN)
+            {
+                return kTofRollAlertMedium;
+            }
+            return kTofRollAlertLow;
+        case kTofRollAlertMedium:
+            if (segments >= TOF_ROLL_SEG_MED_TO_FULL_ENTER)
+            {
+                return kTofRollAlertFull;
+            }
+            if (segments > TOF_ROLL_SEG_MED_TO_LOW_EXIT)
+            {
+                return kTofRollAlertMedium;
+            }
+            return kTofRollAlertLow;
+        case kTofRollAlertLow:
+            if (segments >= TOF_ROLL_SEG_MED_TO_FULL_ENTER)
+            {
+                return kTofRollAlertFull;
+            }
+            if (segments >= TOF_ROLL_SEG_LOW_TO_MED_ENTER)
+            {
+                return kTofRollAlertMedium;
+            }
+            return kTofRollAlertLow;
+        case kTofRollAlertEmpty:
+        default:
+            if (segments >= TOF_ROLL_SEG_FULL_MIN)
+            {
+                return kTofRollAlertFull;
+            }
+            if (segments >= TOF_ROLL_SEG_MED_MIN)
+            {
+                return kTofRollAlertMedium;
+            }
+            if (segments >= 1u)
+            {
+                return kTofRollAlertLow;
+            }
+            return kTofRollAlertEmpty;
+    }
 }
 
 static void tof_roll_status_style(tof_roll_alert_level_t level,
@@ -1189,7 +1293,49 @@ static void tof_update_roll_alert_ui(uint32_t fullness_q10, bool live_data, uint
     {
         level_mm = s_tp_live_actual_mm;
     }
-    tof_roll_alert_level_t level = tof_roll_alert_level_from_model_mm(level_mm, fullness_q10);
+    const uint8_t segments = tof_roll_segments_from_fullness_q10(fullness_q10);
+    tof_roll_alert_level_t level = tof_roll_alert_level_from_mm_segments(level_mm,
+                                                                          segments,
+                                                                          s_roll_level_stable,
+                                                                          s_roll_level_stable_valid);
+
+    if (!s_roll_level_stable_valid)
+    {
+        s_roll_level_stable = level;
+        s_roll_level_stable_valid = true;
+        s_roll_level_candidate = level;
+        s_roll_level_candidate_count = TOF_ROLL_LEVEL_CONSENSUS_FRAMES;
+    }
+    else if (level != s_roll_level_stable)
+    {
+        if (level == s_roll_level_candidate)
+        {
+            if (s_roll_level_candidate_count < 255u)
+            {
+                s_roll_level_candidate_count++;
+            }
+        }
+        else
+        {
+            s_roll_level_candidate = level;
+            s_roll_level_candidate_count = 1u;
+        }
+
+        if (s_roll_level_candidate_count >= TOF_ROLL_LEVEL_CONSENSUS_FRAMES)
+        {
+            s_roll_level_stable = level;
+            s_roll_level_candidate_count = 0u;
+        }
+        else
+        {
+            level = s_roll_level_stable;
+        }
+    }
+    else
+    {
+        s_roll_level_candidate = level;
+        s_roll_level_candidate_count = 0u;
+    }
 
     const bool warning_level = (level == kTofRollAlertLow) || (level == kTofRollAlertEmpty);
     const bool hard_empty_popup = (level == kTofRollAlertEmpty);
@@ -1555,7 +1701,7 @@ static void tof_calc_frame_stats(const uint16_t mm[64],
 
 static const uint16_t *tof_calc_metric_frame(const uint16_t mm[64], bool live_data)
 {
-    if (!live_data || !s_ai_runtime_on)
+    if (!live_data)
     {
         return mm;
     }
@@ -1952,7 +2098,7 @@ static uint16_t tof_estimator_confidence_q10(uint32_t valid_count, uint16_t spre
     return (uint16_t)conf;
 }
 
-static void tof_estimator_update(const uint16_t mm[64], bool live_data)
+static TOF_UNUSED void tof_estimator_update(const uint16_t mm[64], bool live_data)
 {
 #if TOF_EST_ENABLE
     uint32_t measured_mm_q8 = 0u;
@@ -2103,11 +2249,6 @@ static TOF_UNUSED void tof_ai_region_means(const uint16_t mm[64], uint16_t *cent
 static void tof_ai_log_frame(const uint16_t mm[64], bool live_data, uint32_t tick, uint32_t fullness_q10)
 {
 #if TOF_AI_DATA_LOG_ENABLE
-    if (!s_ai_runtime_on)
-    {
-        return;
-    }
-
     if (!live_data)
     {
         return;
@@ -2130,8 +2271,9 @@ static void tof_ai_log_frame(const uint16_t mm[64], bool live_data, uint32_t tic
     tof_calc_frame_stats(mm, &valid, &min_mm, &max_mm, &avg_mm);
     tof_ai_region_means(mm, &center_avg, &edge_avg);
 
-    PRINTF("AI_CSV,t=%u,live=%u,valid=%u,min=%u,max=%u,avg=%u,act=%u,center=%u,edge=%u,full_q10=%u\r\n",
+    PRINTF("AI_CSV,t=%u,ai=%u,live=%u,valid=%u,min=%u,max=%u,avg=%u,act=%u,center=%u,edge=%u,full_q10=%u\r\n",
            (unsigned)tick,
+           (unsigned)(s_ai_runtime_on ? 1u : 0u),
            1u,
            (unsigned)valid,
            (unsigned)min_mm,
@@ -2540,14 +2682,52 @@ static void tof_draw_fullness_bar(uint32_t fullness_q10, uint32_t mm_q8, bool li
         fullness_q10 = 1024u;
     }
 
-    int32_t fill_w = (int32_t)(((fullness_q10 * (uint32_t)iw) + 512u) / 1024u);
-    if (fill_w > iw)
+    const uint8_t segments_on = tof_roll_segments_from_fullness_q10(fullness_q10);
+    const int32_t seg_count = (int32_t)TOF_ROLL_SEGMENT_COUNT;
+    const int32_t seg_gap = 2;
+    const int32_t total_gap = (seg_count - 1) * seg_gap;
+    int32_t seg_area = iw - total_gap;
+    if (seg_area < seg_count)
     {
-        fill_w = iw;
+        seg_area = iw;
     }
-    if (fill_w > 0)
+    int32_t seg_w = seg_area / seg_count;
+    if (seg_w < 1)
     {
-        display_hal_fill_rect(ix0, iy0, ix0 + fill_w - 1, iy1, tof_tp_bar_color(fullness_q10, live_data));
+        seg_w = 1;
+    }
+    int32_t seg_extra = seg_area - (seg_w * seg_count);
+    if (seg_extra < 0)
+    {
+        seg_extra = 0;
+    }
+
+    int32_t sx = ix0;
+    for (int32_t i = 0; i < seg_count; i++)
+    {
+        int32_t cur_w = seg_w;
+        if (seg_extra > 0)
+        {
+            cur_w++;
+            seg_extra--;
+        }
+        int32_t ex = sx + cur_w - 1;
+        if (ex > ix1)
+        {
+            ex = ix1;
+        }
+
+        const bool on = ((uint8_t)i < segments_on);
+        const uint16_t seg_color = on ? tof_tp_bar_color(fullness_q10, live_data) : pack_rgb565(42u, 32u, 28u);
+        if (ex >= sx)
+        {
+            display_hal_fill_rect(sx, iy0, ex, iy1, seg_color);
+        }
+        sx = ex + 1 + seg_gap;
+        if (sx > ix1)
+        {
+            break;
+        }
     }
     (void)mm_q8;
 }
@@ -2560,82 +2740,87 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         return;
     }
 
-    /* Keep TP roll/bar scaling on a single measurement path regardless of AI/alert UI state. */
-    const uint16_t *calc_mm = tof_calc_metric_frame(mm, live_data);
-    uint16_t avg_mm = 0u;
-    tof_calc_frame_stats(calc_mm, NULL, NULL, NULL, &avg_mm);
-    uint16_t closest_mm = tof_calc_closest_valid_mm(calc_mm);
-    const uint16_t curve_mm = tof_calc_roll_curve_distance_mm(calc_mm, NULL);
-    s_tp_live_closest_mm = tof_apply_tp_mm_calibration(closest_mm);
-
-    /* Roll radius should follow the nearest visible paper surface. Use closest
-     * as the primary metric and only blend in curve lightly for stability.
+    /* Rewritten TP detection pipeline:
+     * 1) use one AI-independent input frame for state decisions;
+     * 2) detect sparse-full and hard-empty explicitly;
+     * 3) smooth only after state decision to keep UI reactive.
      */
-    uint16_t state_mm = 0u;
-    if (closest_mm > 0u)
+    const uint16_t *calc_mm = mm;
+    uint32_t valid_count = 0u;
+    uint16_t avg_mm_raw = 0u;
+    tof_calc_frame_stats(calc_mm, &valid_count, NULL, NULL, &avg_mm_raw);
+    const uint16_t closest_mm_raw = tof_calc_closest_valid_mm(calc_mm);
+    const uint16_t curve_mm_raw = tof_calc_roll_curve_distance_mm(calc_mm, NULL);
+
+    const uint16_t closest_mm = tof_apply_tp_mm_calibration(closest_mm_raw);
+    const uint16_t curve_mm = tof_apply_tp_mm_calibration(curve_mm_raw);
+    const uint16_t avg_mm = tof_apply_tp_mm_calibration(avg_mm_raw);
+    s_tp_live_closest_mm = closest_mm;
+
+    const bool no_surface_signal = (closest_mm == 0u) && (curve_mm == 0u) && (avg_mm == 0u);
+    const bool sparse_or_missing = (valid_count <= TOF_ROLL_EMPTY_SPARSE_VALID_MAX);
+    const bool hard_empty_candidate =
+        no_surface_signal ||
+        (sparse_or_missing && (avg_mm >= TOF_ROLL_EMPTY_SPARSE_AVG_MIN)) ||
+        ((closest_mm > TOF_ROLL_EMPTY_TRIGGER_MM) &&
+         ((curve_mm == 0u) || (curve_mm > TOF_ROLL_EMPTY_TRIGGER_MM)));
+
+    const bool full_capture_candidate =
+        (closest_mm > 0u) && (closest_mm <= TOF_ROLL_FULL_CAPTURE_MM);
+    const bool full_sparse_candidate =
+        (closest_mm > 0u) &&
+        (closest_mm <= TOF_ROLL_LOW_TRIGGER_MM) &&
+        (valid_count <= TOF_ROLL_FULL_SPARSE_VALID_MAX) &&
+        (avg_mm > 0u) &&
+        (avg_mm <= TOF_ROLL_FULL_SPARSE_AVG_MAX);
+
+    uint16_t actual_mm = 0u;
+    if (full_sparse_candidate)
     {
-        state_mm = closest_mm;
-        if (curve_mm > 0u)
-        {
-            uint32_t blended = ((uint32_t)closest_mm * 3u) + (uint32_t)curve_mm;
-            state_mm = (uint16_t)((blended + 2u) / 4u);
-        }
+        actual_mm = TOF_TP_MM_FULL_NEAR;
+    }
+    else if (hard_empty_candidate)
+    {
+        actual_mm = TOF_ROLL_EMPTY_FORCE_MM;
+    }
+    else if ((curve_mm > 0u) && (avg_mm > 0u))
+    {
+        const uint32_t blended = ((uint32_t)curve_mm * 3u) + ((uint32_t)avg_mm * 2u);
+        actual_mm = (uint16_t)((blended + 2u) / 5u);
     }
     else if (curve_mm > 0u)
     {
-        state_mm = curve_mm;
+        actual_mm = curve_mm;
     }
     else if (avg_mm > 0u)
     {
-        state_mm = avg_mm;
+        actual_mm = avg_mm;
+    }
+    else
+    {
+        actual_mm = closest_mm;
     }
 
-    state_mm = tof_apply_tp_mm_calibration(state_mm);
-    if (s_ai_runtime_on && (state_mm > 0u))
+    if (actual_mm == 0u)
     {
-        uint32_t biased_mm = (uint32_t)state_mm + (uint32_t)TOF_AI_MODEL_MM_BIAS;
-        if (biased_mm > TOF_TP_MM_CLIP_MAX)
-        {
-            biased_mm = TOF_TP_MM_CLIP_MAX;
-        }
-        state_mm = (uint16_t)biased_mm;
-    }
-    const bool full_capture_candidate = (s_tp_live_closest_mm > 0u) &&
-                                        (s_tp_live_closest_mm <= TOF_ROLL_FULL_CAPTURE_MM);
-    const bool full_capture_consensus = (state_mm == 0u) ||
-                                        (state_mm <= (TOF_ROLL_FULL_CAPTURE_MM + 20u));
-    const bool full_capture_lock = full_capture_candidate && full_capture_consensus;
-
-    if (full_capture_lock &&
-        ((state_mm == 0u) || (state_mm > (s_tp_live_closest_mm + 2u))))
-    {
-        /* When closest sample indicates full-roll distance, prefer it so
-         * bar/state do not stick in medium from averaged far pixels.
-         */
-        state_mm = TOF_TP_MM_FULL_NEAR;
-    }
-    s_tp_live_actual_mm = state_mm;
-
-    uint16_t actual_mm = state_mm;
-    if (full_capture_lock &&
-        ((actual_mm == 0u) || ((s_tp_live_closest_mm + 4u) < actual_mm)))
-    {
-        actual_mm = TOF_TP_MM_FULL_NEAR;
+        actual_mm = TOF_ROLL_EMPTY_FORCE_MM;
     }
     if (s_alert_popup_hold_empty &&
         full_capture_candidate &&
-        ((s_tp_live_closest_mm + 8u) < actual_mm))
+        (closest_mm <= TOF_ROLL_FULL_CAPTURE_MM))
     {
-        /* Only use aggressive closest-pixel pull while recovering from EMPTY hold. */
         actual_mm = TOF_TP_MM_FULL_NEAR;
     }
+    s_tp_live_actual_mm = actual_mm;
 
     bool snap_extreme = false;
     const uint32_t raw_mm_q8 = (actual_mm > 0u) ? ((uint32_t)actual_mm << 8) : 0u;
     if (raw_mm_q8 > 0u)
     {
         uint16_t snap_mm = actual_mm;
-        snap_extreme = (snap_mm <= TOF_ROLL_FULL_CAPTURE_MM) ||
+        snap_extreme = full_sparse_candidate ||
+                       hard_empty_candidate ||
+                       (snap_mm <= TOF_ROLL_FULL_CAPTURE_MM) ||
                        (snap_mm > TOF_ROLL_EMPTY_TRIGGER_MM);
         if (s_tp_mm_q8 == 0u || snap_extreme)
         {
@@ -2659,14 +2844,19 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     uint32_t model_mm_q8 = s_tp_mm_q8;
 
 #if TOF_EST_ENABLE
-    if (s_ai_runtime_on)
-    {
-        tof_estimator_update(calc_mm, live_data);
-    }
+    (void)live_data;
 #endif
     uint32_t fullness_q10 = tof_tp_fullness_q10_from_mm_q8_bounds(model_mm_q8,
                                                                    TOF_TP_MM_FULL_NEAR,
                                                                    TOF_TP_BAR_MM_EMPTY);
+    if (full_sparse_candidate)
+    {
+        fullness_q10 = 1024u;
+    }
+    else if (hard_empty_candidate)
+    {
+        fullness_q10 = 0u;
+    }
     if (fullness_q10 > 1024u)
     {
         fullness_q10 = 1024u;
@@ -2676,7 +2866,8 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     {
         bar_fullness_q10 = 1024u;
     }
-    uint16_t bar_fullness_draw_q10 = (uint16_t)((((bar_fullness_q10 + 4u) / 8u) * 8u));
+    const uint8_t bar_segments = tof_roll_segments_from_fullness_q10(bar_fullness_q10);
+    uint16_t bar_fullness_draw_q10 = (uint16_t)((uint32_t)bar_segments * 128u);
     if (bar_fullness_draw_q10 > 1024u)
     {
         bar_fullness_draw_q10 = 1024u;
@@ -3166,6 +3357,10 @@ static void tof_ui_init(void)
     s_roll_alert_prev_valid = false;
     s_roll_status_prev_level = kTofRollAlertFull;
     s_roll_status_prev_valid = false;
+    s_roll_level_stable = kTofRollAlertFull;
+    s_roll_level_stable_valid = false;
+    s_roll_level_candidate = kTofRollAlertFull;
+    s_roll_level_candidate_count = 0u;
     s_roll_status_prev_live = false;
     s_alert_popup_active = false;
     s_alert_popup_prev_drawn = false;
@@ -4424,7 +4619,7 @@ int main(void)
 
         tof_touch_poll_ai_toggle(tick);
         const bool model_live = (tof_ok && have_live);
-        tof_update_spool_model(frame_mm, model_live, tick, !popup_visible);
+        tof_update_spool_model(frame_mm, model_live, tick, true);
         if (!popup_visible)
         {
             tof_update_debug_panel(frame_mm,
