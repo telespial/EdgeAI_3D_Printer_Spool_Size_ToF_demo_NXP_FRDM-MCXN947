@@ -1,5 +1,7 @@
 # Build And Flash
 
+Current baseline tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
+
 ## Prerequisites
 - Ubuntu toolchain bootstrap complete
 - NXP LinkServer installed and on `PATH`

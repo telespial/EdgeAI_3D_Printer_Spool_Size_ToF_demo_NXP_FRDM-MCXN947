@@ -19,6 +19,17 @@ This repo now includes:
 3. `./tools/build_frdmmcxn947.sh debug`
 4. `./tools/flash_frdmmcxn947.sh`
 
+## Session Read Order
+1. `docs/START_HERE.md`
+2. `docs/PROJECT_STATE.md`
+3. `docs/OPS_RUNBOOK.md`
+4. `docs/HARDWARE_SETUP.md`
+
+## Current Restore Baseline
+- Golden tag: `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
+- Lock tag: `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
+- Failsafe image pointer: `docs/failsafe.md`
+
 ## Key Paths
 - Application source: `src/tof_demo.c`, `src/tmf8828_quick.c`, `src/par_lcd_s035.c`
 - MCUX overlay app: `sdk_example/mcuxsdk_examples_overlay/demo_apps/tof_demo`

@@ -3,6 +3,21 @@
 Date: 2026-02-12
 Project: ToF__demo_NXP_FRDM-MCXN947
 
+## Update 2026-02-13 (v5 Golden Handoff)
+
+- New baseline restore point published:
+  - `GOLDEN_2026-02-13_v5_full_reacquire_alertoff`
+  - `GOLDEN_LOCK_2026-02-13_v5_920a5d8`
+  - failsafe image: `failsafe/FAILSAFE_2026-02-13_v5_full_reacquire_alertoff.elf`
+- Alert runtime default changed to OFF.
+- Roll state path now prioritizes closest-valid pixel for TP model decisions.
+- Full-roll reacquire guard was widened for repeated swap sequences (`full -> low -> full`).
+- Calibration baseline in current code:
+  - full anchor `<=35 mm`
+  - empty trigger `>60 mm`
+- Remaining verification focus:
+  - extended repeated-swap runs to confirm full-state re-lock over long cycles.
+
 ## Goal
 - Show stable, responsive 8x8 distance heatmap on LCD.
 - All cells should react coherently for broad/flat targets.
