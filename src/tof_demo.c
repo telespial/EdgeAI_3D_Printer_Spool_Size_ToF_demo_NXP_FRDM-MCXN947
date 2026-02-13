@@ -6,6 +6,10 @@
 #include "app.h"
 #include "fsl_common.h"
 #include "fsl_debug_console.h"
+#include "fsl_gpio.h"
+#include "fsl_lpi2c.h"
+#include "fsl_port.h"
+#include "fsl_gt911.h"
 
 #include "platform/display_hal.h"
 #include "tmf8828_quick.h"
@@ -29,7 +33,8 @@
 #define TOF_TP_Y0 0
 #define TOF_TP_Y1 (TOF_LCD_H - 1)
 #define TOF_LOCKED_NEAR_MM 50u
-#define TOF_LOCKED_FAR_MM  150u
+#define TOF_LOCKED_FAR_MM  120u
+#define TOF_HEATMAP_DARK_MM 100u
 #define TOF_STALE_LIMIT_FRAMES 120u
 #define TOF_RESTART_LIMIT_FRAMES 300u
 #define TOF_REINIT_LIMIT_FRAMES 600u
@@ -63,12 +68,12 @@
 #define TOF_DRAW_ON_COMPLETE_ONLY 1u
 #define TOF_USE_DYNAMIC_RANGE 0u
 #define TOF_RESPONSE_TARGET_US 500000u
-#define TOF_DEBUG_UPDATE_US 500000u
+#define TOF_DEBUG_UPDATE_US 200000u
 #define TOF_DEBUG_UPDATE_TICKS_RAW ((TOF_DEBUG_UPDATE_US + TOF_FRAME_US - 1u) / TOF_FRAME_US)
 #define TOF_DEBUG_UPDATE_TICKS ((TOF_DEBUG_UPDATE_TICKS_RAW > 0u) ? TOF_DEBUG_UPDATE_TICKS_RAW : 1u)
 #define TOF_MAX_DRAW_GAP_TICKS_RAW ((TOF_RESPONSE_TARGET_US + TOF_FRAME_US - 1u) / TOF_FRAME_US)
 #define TOF_MAX_DRAW_GAP_TICKS ((TOF_MAX_DRAW_GAP_TICKS_RAW > 0u) ? TOF_MAX_DRAW_GAP_TICKS_RAW : 1u)
-#define TOF_TP_UPDATE_US 100000u
+#define TOF_TP_UPDATE_US 20000u
 #define TOF_TP_UPDATE_TICKS_RAW ((TOF_TP_UPDATE_US + TOF_FRAME_US - 1u) / TOF_FRAME_US)
 #define TOF_TP_UPDATE_TICKS ((TOF_TP_UPDATE_TICKS_RAW > 0u) ? TOF_TP_UPDATE_TICKS_RAW : 1u)
 
@@ -80,11 +85,68 @@
 #define TOF_DBG_LINES 6u
 #define TOF_DBG_COLS 19u
 
-#define TOF_TP_MM_FULL_NEAR 50u
-#define TOF_TP_MM_EMPTY_FAR 100u
+#define TOF_TP_MM_FULL_NEAR 35u
+#define TOF_TP_MM_EMPTY_FAR 65u
+#define TOF_TP_MM_CLIP_MIN TOF_TP_MM_FULL_NEAR
+#define TOF_TP_MM_CLIP_MAX 120u
+#define TOF_TP_MM_SHIFT (-10)
+#define TOF_AI_PILL_H 20
+#define TOF_AI_PILL_MARGIN_X 4
+#define TOF_AI_PILL_MARGIN_BOTTOM 4
+#define TOF_ALERT_PILL_H 20
+#define TOF_ALERT_PILL_GAP_Y 6
+#define TOF_ALERT_POPUP_US 3000000u
+#define TOF_ALERT_POPUP_TICKS_RAW ((TOF_ALERT_POPUP_US + TOF_FRAME_US - 1u) / TOF_FRAME_US)
+#define TOF_ALERT_POPUP_TICKS ((TOF_ALERT_POPUP_TICKS_RAW > 0u) ? TOF_ALERT_POPUP_TICKS_RAW : 1u)
+#define TOF_ALERT_POPUP_X_MARGIN 18
+#define TOF_ALERT_POPUP_W_PCT 80
+#define TOF_ALERT_POPUP_H 81
+#define TOF_ALERT_POPUP_GAP_Y 6
+#define TOF_TP_BAR_MARGIN_X 12
+#define TOF_TP_BAR_H 18
+#define TOF_TP_STATUS_H 16
+#define TOF_TP_STATUS_GAP_Y 6
+#define TOF_ROLL_MEDIUM_TRIGGER_MM TOF_TP_MM_FULL_NEAR
+#define TOF_ROLL_LOW_TRIGGER_MM 50u
+#define TOF_ROLL_EMPTY_TRIGGER_MM 65u
+#define TOF_AI_MODEL_MM_BIAS 0u
+#define TOF_ROLL_FULL_CAPTURE_MM (TOF_TP_MM_FULL_NEAR + 8u)
+#define TOF_ROLL_FULL_REARM_STREAK 2u
+#define TOF_TP_BAR_MM_EMPTY (TOF_ROLL_EMPTY_TRIGGER_MM + 1u)
+#define TOF_TP_ROLL_REDRAW_MM_DELTA 2u
+#define TOF_TP_CURVE_ROWS_PICK 4u
+#define TOF_TP_CURVE_EDGE_GUARD_COLS 1u
+#define TOF_TP_CURVE_MIN_ROWS 4u
+
+#define TOF_EST_ENABLE 1u
+#define TOF_EST_VALID_MIN 10u
+#define TOF_EST_SPREAD_GOOD_MM 120u
+#define TOF_EST_SPREAD_BAD_MM 700u
+#define TOF_EST_FAST_DELTA_MM 8u
+#define TOF_EST_CONF_TRAIN_MIN_Q10 700u
+#define TOF_EST_NEAR_MIN_MM 40u
+#define TOF_EST_NEAR_MAX_MM 70u
+#define TOF_EST_FAR_MIN_MM 90u
+#define TOF_EST_FAR_MAX_MM 120u
+#define TOF_EST_MIN_GAP_MM 25u
+#define TOF_AI_GRID_ENABLE 1u
+#define TOF_AI_GRID_NEIGHBOR_MIN 2u
+#define TOF_AI_GRID_OUTLIER_MM_MIN 16u
+#define TOF_AI_GRID_OUTLIER_MM_MAX 80u
+#define TOF_AI_GRID_FAST_DELTA_MM 10u
+#define TOF_AI_GRID_HOLD_FRAMES 24u
+#define TOF_CORNER_REPAIR_DELTA_MM 72u
+#define TOF_TOUCH_I2C LPI2C2
+#define TOF_TOUCH_I2C_SUBADDR_SIZE 2u
+#define TOF_TOUCH_POLL_US 20000u
+#define TOF_TOUCH_POLL_TICKS_RAW ((TOF_TOUCH_POLL_US + TOF_FRAME_US - 1u) / TOF_FRAME_US)
+#define TOF_TOUCH_POLL_TICKS ((TOF_TOUCH_POLL_TICKS_RAW > 0u) ? TOF_TOUCH_POLL_TICKS_RAW : 1u)
+#define TOF_TOUCH_POINTS 5u
+#define TOF_TOUCH_INT_PORT PORT4
+#define TOF_TOUCH_INT_PIN 6u
 
 #ifndef TOF_AI_DATA_LOG_ENABLE
-#define TOF_AI_DATA_LOG_ENABLE 0u
+#define TOF_AI_DATA_LOG_ENABLE 1u
 #endif
 #ifndef TOF_AI_DATA_LOG_FULL_FRAME
 #define TOF_AI_DATA_LOG_FULL_FRAME 0u
@@ -125,6 +187,14 @@ typedef struct
     int16_t iy1;
 } tof_cell_rect_t;
 
+typedef enum
+{
+    kTofRollAlertFull = 0,
+    kTofRollAlertMedium = 1,
+    kTofRollAlertLow = 2,
+    kTofRollAlertEmpty = 3,
+} tof_roll_alert_level_t;
+
 static tof_cell_rect_t s_cells[64];
 static uint16_t s_filtered_mm[64];
 static uint16_t s_display_mm[64];
@@ -136,10 +206,13 @@ static uint8_t s_display_age[64];
 static uint16_t s_ui_bg;
 static uint16_t s_ui_border;
 static uint16_t s_ui_hot;
+static uint16_t s_ui_pick;
 static uint16_t s_ui_invalid;
 static uint16_t s_ui_below_range;
 static uint16_t s_ui_above_range;
 static int32_t s_hot_idx = -1;
+static int16_t s_curve_pick_idx[TOF_GRID_H];
+static int16_t s_curve_prev_pick_idx[TOF_GRID_H];
 static uint16_t s_ui_dbg_bg;
 static uint16_t s_ui_dbg_fg;
 static uint16_t s_ui_dbg_dim;
@@ -150,11 +223,27 @@ static int16_t s_dbg_y1;
 static bool s_dbg_force_redraw = true;
 static char s_dbg_prev[TOF_DBG_LINES][TOF_DBG_COLS + 1u];
 static uint32_t s_dbg_last_tick = 0u;
+static int16_t s_ai_pill_x0 = 0;
+static int16_t s_ai_pill_y0 = 0;
+static int16_t s_ai_pill_x1 = 0;
+static int16_t s_ai_pill_y1 = 0;
+static bool s_ai_pill_prev_valid = false;
+static bool s_ai_pill_prev_on = false;
+static int16_t s_alert_pill_x0 = 0;
+static int16_t s_alert_pill_y0 = 0;
+static int16_t s_alert_pill_x1 = 0;
+static int16_t s_alert_pill_y1 = 0;
+static bool s_alert_pill_prev_valid = false;
+static bool s_alert_pill_prev_on = true;
 static bool s_tp_force_redraw = true;
 static uint32_t s_tp_last_tick = 0u;
 static uint16_t s_tp_last_outer_ry = 0u;
+static uint16_t s_tp_last_outer_rx = 0u;
 static uint16_t s_tp_last_fullness_q10 = 0u;
+static uint32_t s_tp_last_roll_mm_q8 = 0u;
 static uint32_t s_tp_mm_q8 = 0u;
+static uint16_t s_tp_live_actual_mm = 0u;
+static uint16_t s_tp_live_closest_mm = 0u;
 static bool s_tp_last_live = false;
 static bool s_tp_prev_rect_valid = false;
 static int16_t s_tp_prev_x0 = 0;
@@ -162,11 +251,65 @@ static int16_t s_tp_prev_y0 = 0;
 static int16_t s_tp_prev_x1 = 0;
 static int16_t s_tp_prev_y1 = 0;
 static uint32_t s_ai_log_last_tick = 0u;
+static gt911_handle_t s_touch_handle;
+static bool s_touch_ready = false;
+static bool s_touch_was_down = false;
+static uint32_t s_touch_last_poll_tick = 0u;
+static bool s_ai_runtime_on = (TOF_AI_DATA_LOG_ENABLE != 0u);
+static uint16_t s_est_near_mm = TOF_TP_MM_FULL_NEAR;
+static uint16_t s_est_far_mm = TOF_TP_MM_EMPTY_FAR;
+static uint32_t s_est_mm_q8 = 0u;
+static uint16_t s_est_conf_q10 = 0u;
+static uint16_t s_est_fullness_q10 = 640u;
+static uint32_t s_est_valid_count = 0u;
+static uint16_t s_est_spread_mm = 0u;
+static uint16_t s_roll_fullness_q10 = 640u;
+static uint16_t s_roll_model_mm = 0u;
+static bool s_alert_runtime_on = true;
+static tof_roll_alert_level_t s_roll_alert_prev_level = kTofRollAlertFull;
+static bool s_roll_alert_prev_valid = false;
+static tof_roll_alert_level_t s_roll_status_prev_level = kTofRollAlertFull;
+static bool s_roll_status_prev_valid = false;
+static bool s_roll_status_prev_live = false;
+static bool s_alert_popup_active = false;
+static bool s_alert_popup_prev_drawn = false;
+static bool s_alert_popup_rearm_on_full = true;
+static bool s_alert_popup_hold_empty = false;
+static bool s_alert_low_popup_shown = false;
+static uint8_t s_roll_full_rearm_streak = 0u;
+static tof_roll_alert_level_t s_alert_popup_level = kTofRollAlertLow;
+static tof_roll_alert_level_t s_alert_popup_prev_level = kTofRollAlertLow;
+static uint32_t s_alert_popup_until_tick = 0u;
+static bool s_alert_popup_last_live = false;
+static int16_t s_alert_popup_prev_x0 = 0;
+static int16_t s_alert_popup_prev_y0 = 0;
+static int16_t s_alert_popup_prev_x1 = 0;
+static int16_t s_alert_popup_prev_y1 = 0;
+static uint16_t s_ai_grid_mm[64];
+static uint8_t s_ai_grid_hold_age[64];
+static uint16_t s_ai_grid_noise_mm = 0u;
 
 static uint16_t s_range_near_mm = TOF_LOCKED_NEAR_MM;
 static uint16_t s_range_far_mm = TOF_LOCKED_FAR_MM;
 static uint16_t s_synth_subcap_frame[64];
 static uint8_t s_synth_subcap_capture = 0u;
+
+static void tof_ai_grid_reset(void);
+static void tof_tp_bar_rect(int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1);
+static void tof_tp_status_rect(int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1);
+static uint16_t tof_tp_bg_color(uint32_t t, bool live_data);
+static void tof_tp_fill_bg_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, bool live_data);
+static void tof_draw_roll_status_banner(tof_roll_alert_level_t level, bool live_data);
+static void tof_ai_denoise_heatmap_frame(const uint16_t in_mm[64], uint16_t out_mm[64], bool live_data);
+static void tof_tiny_draw_char_scaled_clipped(int32_t x,
+                                              int32_t y,
+                                              char ch,
+                                              uint16_t color,
+                                              uint32_t scale,
+                                              int32_t clip_x0,
+                                              int32_t clip_y0,
+                                              int32_t clip_x1,
+                                              int32_t clip_y1);
 
 static bool tof_mm_valid(uint16_t mm)
 {
@@ -191,9 +334,15 @@ static uint16_t tof_color_from_mm(uint16_t mm, uint16_t near_mm, uint16_t far_mm
         return s_ui_invalid;
     }
 
-    if (far_mm <= near_mm)
+    uint16_t color_far_mm = far_mm;
+    if (color_far_mm > TOF_HEATMAP_DARK_MM)
     {
-        far_mm = (uint16_t)(near_mm + 1u);
+        color_far_mm = TOF_HEATMAP_DARK_MM;
+    }
+
+    if (color_far_mm <= near_mm)
+    {
+        color_far_mm = (uint16_t)(near_mm + 1u);
     }
 
     if (mm < near_mm)
@@ -201,58 +350,41 @@ static uint16_t tof_color_from_mm(uint16_t mm, uint16_t near_mm, uint16_t far_mm
         return s_ui_below_range;
     }
 
-    if (mm > far_mm)
+    if (mm > color_far_mm)
     {
         return s_ui_above_range;
     }
 
-    const uint32_t near = near_mm;
-    const uint32_t far = far_mm;
-    uint32_t t;
-    if (mm <= near)
+    uint32_t t = 0u;
+    if (mm <= near_mm)
     {
         t = 0u;
     }
-    else if (mm >= far)
+    else if (mm >= color_far_mm)
     {
         t = 255u;
     }
     else
     {
-        t = (uint32_t)(((uint32_t)(mm - near) * 255u) / (far - near));
+        t = (uint32_t)(((uint32_t)(mm - near_mm) * 255u) / (color_far_mm - near_mm));
     }
 
-    uint32_t r;
-    uint32_t g;
-    uint32_t b;
-
-    if (t < 64u)
+    uint32_t r = 0u;
+    uint32_t g = 0u;
+    uint32_t b = 0u;
+    if (t < 128u)
     {
-        uint32_t u = t * 4u;
-        r = 0u;
-        g = u;
-        b = 255u;
-    }
-    else if (t < 128u)
-    {
-        uint32_t u = (t - 64u) * 4u;
-        r = 0u;
-        g = 255u;
-        b = 255u - u;
-    }
-    else if (t < 192u)
-    {
-        uint32_t u = (t - 128u) * 4u;
-        r = u;
-        g = 255u;
+        const uint32_t u = t * 2u;
+        r = (u * 220u) / 255u;
+        g = 220u - ((u * 40u) / 255u);
         b = 0u;
     }
     else
     {
-        uint32_t u = (t - 192u) * 4u;
-        r = 255u;
-        g = 255u - u;
-        b = 0u;
+        const uint32_t u = (t - 128u) * 2u;
+        r = 220u - ((u * 164u) / 255u);
+        g = 180u - ((u * 172u) / 255u);
+        b = (u * 8u) / 255u;
     }
 
     return pack_rgb565(r, g, b);
@@ -311,6 +443,57 @@ static void tof_fill_display_holes(const uint16_t in_mm[64], uint16_t out_mm[64]
             }
         }
     }
+}
+
+static void tof_repair_corner_one(uint16_t mm[64], uint32_t corner_idx, uint32_t n0, uint32_t n1, uint32_t n2)
+{
+    uint32_t sum = 0u;
+    uint32_t count = 0u;
+    const uint16_t v0 = mm[n0];
+    const uint16_t v1 = mm[n1];
+    const uint16_t v2 = mm[n2];
+
+    if (tof_mm_valid(v0))
+    {
+        sum += v0;
+        count++;
+    }
+    if (tof_mm_valid(v1))
+    {
+        sum += v1;
+        count++;
+    }
+    if (tof_mm_valid(v2))
+    {
+        sum += v2;
+        count++;
+    }
+
+    if (count < 2u)
+    {
+        return;
+    }
+
+    const uint16_t neighbor_mm = (uint16_t)((sum + (count / 2u)) / count);
+    const uint16_t corner_mm = mm[corner_idx];
+    const uint16_t delta_mm = (corner_mm > neighbor_mm) ? (uint16_t)(corner_mm - neighbor_mm) : (uint16_t)(neighbor_mm - corner_mm);
+    if (!tof_mm_valid(corner_mm) || delta_mm > TOF_CORNER_REPAIR_DELTA_MM)
+    {
+        mm[corner_idx] = neighbor_mm;
+    }
+}
+
+static void tof_repair_corner_blindspots(uint16_t mm[64])
+{
+    const uint32_t top_left = 0u;
+    const uint32_t top_right = (TOF_GRID_W - 1u);
+    const uint32_t bot_left = ((TOF_GRID_H - 1u) * TOF_GRID_W);
+    const uint32_t bot_right = (TOF_GRID_H * TOF_GRID_W) - 1u;
+
+    tof_repair_corner_one(mm, top_left, 1u, TOF_GRID_W, TOF_GRID_W + 1u);
+    tof_repair_corner_one(mm, top_right, TOF_GRID_W - 2u, (2u * TOF_GRID_W) - 2u, (2u * TOF_GRID_W) - 1u);
+    tof_repair_corner_one(mm, bot_left, (TOF_GRID_H - 2u) * TOF_GRID_W, ((TOF_GRID_H - 2u) * TOF_GRID_W) + 1u, ((TOF_GRID_H - 1u) * TOF_GRID_W) + 1u);
+    tof_repair_corner_one(mm, bot_right, (TOF_GRID_H * TOF_GRID_W) - 2u, ((TOF_GRID_H - 1u) * TOF_GRID_W) - 2u, ((TOF_GRID_H - 1u) * TOF_GRID_W) - 1u);
 }
 
 static int32_t tof_clamp_i32(int32_t v, int32_t lo, int32_t hi)
@@ -381,8 +564,33 @@ static void tof_dbg_get_glyph(char ch, uint8_t rows[TOF_DBG_CHAR_H])
     }
 }
 
-static void tof_dbg_draw_char(int32_t x, int32_t y, char ch, uint16_t color)
+static void tof_tiny_draw_char_clipped(int32_t x,
+                                       int32_t y,
+                                       char ch,
+                                       uint16_t color,
+                                       int32_t clip_x0,
+                                       int32_t clip_y0,
+                                       int32_t clip_x1,
+                                       int32_t clip_y1)
 {
+    tof_tiny_draw_char_scaled_clipped(x, y, ch, color, TOF_DBG_SCALE, clip_x0, clip_y0, clip_x1, clip_y1);
+}
+
+static void tof_tiny_draw_char_scaled_clipped(int32_t x,
+                                              int32_t y,
+                                              char ch,
+                                              uint16_t color,
+                                              uint32_t scale,
+                                              int32_t clip_x0,
+                                              int32_t clip_y0,
+                                              int32_t clip_x1,
+                                              int32_t clip_y1)
+{
+    if (scale == 0u)
+    {
+        return;
+    }
+
     uint8_t rows[TOF_DBG_CHAR_H];
     tof_dbg_get_glyph(ch, rows);
 
@@ -395,17 +603,22 @@ static void tof_dbg_draw_char(int32_t x, int32_t y, char ch, uint16_t color)
                 continue;
             }
 
-            const int32_t px0 = x + (int32_t)(rx * TOF_DBG_SCALE);
-            const int32_t py0 = y + (int32_t)(ry * TOF_DBG_SCALE);
-            const int32_t px1 = px0 + TOF_DBG_SCALE - 1;
-            const int32_t py1 = py0 + TOF_DBG_SCALE - 1;
-            if (px1 < s_dbg_x0 || px0 > s_dbg_x1 || py1 < s_dbg_y0 || py0 > s_dbg_y1)
+            const int32_t px0 = x + (int32_t)(rx * scale);
+            const int32_t py0 = y + (int32_t)(ry * scale);
+            const int32_t px1 = px0 + (int32_t)scale - 1;
+            const int32_t py1 = py0 + (int32_t)scale - 1;
+            if (px1 < clip_x0 || px0 > clip_x1 || py1 < clip_y0 || py0 > clip_y1)
             {
                 continue;
             }
             display_hal_fill_rect(px0, py0, px1, py1, color);
         }
     }
+}
+
+static void tof_dbg_draw_char(int32_t x, int32_t y, char ch, uint16_t color)
+{
+    tof_tiny_draw_char_clipped(x, y, ch, color, s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y1);
 }
 
 static void tof_dbg_draw_line(uint32_t line_idx, const char *text, uint16_t color)
@@ -447,6 +660,846 @@ static void tof_dbg_draw_line(uint32_t line_idx, const char *text, uint16_t colo
     }
 }
 
+static tof_roll_alert_level_t tof_roll_alert_level_from_model_mm(uint16_t mm)
+{
+    if ((mm == 0u) || (mm <= TOF_ROLL_MEDIUM_TRIGGER_MM))
+    {
+        return kTofRollAlertFull;
+    }
+    if (mm <= TOF_ROLL_LOW_TRIGGER_MM)
+    {
+        return kTofRollAlertMedium;
+    }
+    if (mm <= TOF_ROLL_EMPTY_TRIGGER_MM)
+    {
+        return kTofRollAlertLow;
+    }
+    return kTofRollAlertEmpty;
+}
+
+static void tof_roll_status_style(tof_roll_alert_level_t level,
+                                  const char **label,
+                                  uint16_t *bg,
+                                  uint16_t *border,
+                                  uint16_t *fg)
+{
+    const char *text = "ROLL FULL";
+    uint16_t c_bg = pack_rgb565(22u, 82u, 28u);
+    uint16_t c_border = pack_rgb565(118u, 210u, 126u);
+    uint16_t c_fg = pack_rgb565(236u, 242u, 240u);
+
+    switch (level)
+    {
+        case kTofRollAlertMedium:
+            text = "ROLL MEDIUM";
+            c_bg = pack_rgb565(98u, 82u, 18u);
+            c_border = pack_rgb565(232u, 202u, 104u);
+            c_fg = pack_rgb565(248u, 236u, 206u);
+            break;
+        case kTofRollAlertLow:
+            text = "ROLL LOW";
+            c_bg = pack_rgb565(128u, 106u, 20u);
+            c_border = pack_rgb565(246u, 224u, 98u);
+            c_fg = pack_rgb565(254u, 246u, 214u);
+            break;
+        case kTofRollAlertEmpty:
+            text = "ROLL EMPTY";
+            c_bg = pack_rgb565(86u, 8u, 8u);
+            c_border = pack_rgb565(246u, 104u, 104u);
+            c_fg = pack_rgb565(254u, 228u, 228u);
+            break;
+        case kTofRollAlertFull:
+        default:
+            break;
+    }
+
+    if (label != NULL)
+    {
+        *label = text;
+    }
+    if (bg != NULL)
+    {
+        *bg = c_bg;
+    }
+    if (border != NULL)
+    {
+        *border = c_border;
+    }
+    if (fg != NULL)
+    {
+        *fg = c_fg;
+    }
+}
+
+static const char *tof_roll_popup_message(tof_roll_alert_level_t level)
+{
+    if (level == kTofRollAlertLow)
+    {
+        return "WARNING ROLL LOW";
+    }
+    if (level == kTofRollAlertEmpty)
+    {
+        return "WARNING ROLL EMPTY";
+    }
+    return "ROLL STATUS";
+}
+
+static void tof_draw_ai_pill(bool ai_on)
+{
+    if (!s_dbg_force_redraw && s_ai_pill_prev_valid && (s_ai_pill_prev_on == ai_on))
+    {
+        return;
+    }
+
+    const uint16_t bg = ai_on ? pack_rgb565(22u, 86u, 46u) : pack_rgb565(92u, 22u, 24u);
+    const uint16_t border = ai_on ? pack_rgb565(120u, 210u, 140u) : pack_rgb565(220u, 120u, 120u);
+    const uint16_t fg = pack_rgb565(238u, 242u, 246u);
+
+    display_hal_fill_rect(s_ai_pill_x0, s_ai_pill_y0, s_ai_pill_x1, s_ai_pill_y1, bg);
+    display_hal_fill_rect(s_ai_pill_x0, s_ai_pill_y0, s_ai_pill_x1, s_ai_pill_y0, border);
+    display_hal_fill_rect(s_ai_pill_x0, s_ai_pill_y1, s_ai_pill_x1, s_ai_pill_y1, border);
+    display_hal_fill_rect(s_ai_pill_x0, s_ai_pill_y0, s_ai_pill_x0, s_ai_pill_y1, border);
+    display_hal_fill_rect(s_ai_pill_x1, s_ai_pill_y0, s_ai_pill_x1, s_ai_pill_y1, border);
+
+    const char *label = ai_on ? "AI ON" : "AI OFF";
+    const size_t n = strlen(label);
+    const int32_t text_w = (n > 0u) ? ((int32_t)(n * TOF_DBG_CHAR_ADV) - 2) : 0;
+    const int32_t text_h = TOF_DBG_CHAR_H * TOF_DBG_SCALE;
+    int32_t x = s_ai_pill_x0 + ((s_ai_pill_x1 - s_ai_pill_x0 + 1 - text_w) / 2);
+    int32_t y = s_ai_pill_y0 + ((s_ai_pill_y1 - s_ai_pill_y0 + 1 - text_h) / 2);
+    if (x < (s_ai_pill_x0 + 2))
+    {
+        x = s_ai_pill_x0 + 2;
+    }
+    if (y < (s_ai_pill_y0 + 1))
+    {
+        y = s_ai_pill_y0 + 1;
+    }
+
+    for (size_t i = 0u; i < n; i++)
+    {
+        tof_dbg_draw_char(x, y, label[i], fg);
+        x += TOF_DBG_CHAR_ADV;
+    }
+
+    s_ai_pill_prev_valid = true;
+    s_ai_pill_prev_on = ai_on;
+}
+
+static void tof_draw_alert_pill(bool alert_on)
+{
+    if (!s_dbg_force_redraw && s_alert_pill_prev_valid && (s_alert_pill_prev_on == alert_on))
+    {
+        return;
+    }
+
+    const uint16_t bg = alert_on ? pack_rgb565(78u, 62u, 18u) : pack_rgb565(48u, 26u, 18u);
+    const uint16_t border = alert_on ? pack_rgb565(232u, 198u, 98u) : pack_rgb565(202u, 128u, 104u);
+    const uint16_t fg = pack_rgb565(246u, 238u, 218u);
+    const char *label = alert_on ? "ALERT ON" : "ALERT OFF";
+
+    display_hal_fill_rect(s_alert_pill_x0, s_alert_pill_y0, s_alert_pill_x1, s_alert_pill_y1, bg);
+    display_hal_fill_rect(s_alert_pill_x0, s_alert_pill_y0, s_alert_pill_x1, s_alert_pill_y0, border);
+    display_hal_fill_rect(s_alert_pill_x0, s_alert_pill_y1, s_alert_pill_x1, s_alert_pill_y1, border);
+    display_hal_fill_rect(s_alert_pill_x0, s_alert_pill_y0, s_alert_pill_x0, s_alert_pill_y1, border);
+    display_hal_fill_rect(s_alert_pill_x1, s_alert_pill_y0, s_alert_pill_x1, s_alert_pill_y1, border);
+
+    const size_t n = strlen(label);
+    const int32_t text_w = (n > 0u) ? ((int32_t)(n * TOF_DBG_CHAR_ADV) - 2) : 0;
+    const int32_t text_h = TOF_DBG_CHAR_H * TOF_DBG_SCALE;
+    int32_t x = s_alert_pill_x0 + ((s_alert_pill_x1 - s_alert_pill_x0 + 1 - text_w) / 2);
+    int32_t y = s_alert_pill_y0 + ((s_alert_pill_y1 - s_alert_pill_y0 + 1 - text_h) / 2);
+    if (x < (s_alert_pill_x0 + 2))
+    {
+        x = s_alert_pill_x0 + 2;
+    }
+    if (y < (s_alert_pill_y0 + 1))
+    {
+        y = s_alert_pill_y0 + 1;
+    }
+
+    for (size_t i = 0u; i < n; i++)
+    {
+        tof_tiny_draw_char_clipped(x, y, label[i], fg, s_alert_pill_x0, s_alert_pill_y0, s_alert_pill_x1, s_alert_pill_y1);
+        x += TOF_DBG_CHAR_ADV;
+    }
+
+    s_alert_pill_prev_valid = true;
+    s_alert_pill_prev_on = alert_on;
+}
+
+static void tof_alert_popup_rect(int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
+{
+    int32_t popup_w = (TOF_LCD_W * TOF_ALERT_POPUP_W_PCT) / 100;
+    popup_w = tof_clamp_i32(popup_w, 160, TOF_LCD_W - (2 * TOF_ALERT_POPUP_X_MARGIN));
+    int32_t lx0 = (TOF_LCD_W - popup_w) / 2;
+    int32_t lx1 = lx0 + popup_w - 1;
+    int32_t ly0 = (TOF_LCD_H - TOF_ALERT_POPUP_H) / 2;
+    int32_t ly1 = ly0 + TOF_ALERT_POPUP_H - 1;
+
+    lx0 = tof_clamp_i32(lx0, 0, TOF_LCD_W - 1);
+    lx1 = tof_clamp_i32(lx1, 0, TOF_LCD_W - 1);
+    ly0 = tof_clamp_i32(ly0, 0, TOF_LCD_H - 1);
+    ly1 = tof_clamp_i32(ly1, 0, TOF_LCD_H - 1);
+    if (ly1 <= ly0)
+    {
+        ly0 = 2;
+        ly1 = ly0 + TOF_ALERT_POPUP_H - 1;
+        if (ly1 >= TOF_LCD_H)
+        {
+            ly1 = TOF_LCD_H - 1;
+            ly0 = ly1 - TOF_ALERT_POPUP_H + 1;
+            ly0 = tof_clamp_i32(ly0, 0, TOF_LCD_H - 1);
+        }
+    }
+
+    if (x0 != NULL)
+    {
+        *x0 = lx0;
+    }
+    if (y0 != NULL)
+    {
+        *y0 = ly0;
+    }
+    if (x1 != NULL)
+    {
+        *x1 = lx1;
+    }
+    if (y1 != NULL)
+    {
+        *y1 = ly1;
+    }
+}
+
+static void tof_scrub_left_panel(bool force_debug_redraw)
+{
+    display_hal_fill_rect(TOF_Q1_X0, TOF_Q1_TOP_Y0, TOF_Q1_X1, TOF_Q1_TOP_Y1, s_ui_bg);
+    display_hal_fill_rect(TOF_Q1_X0, TOF_Q1_BOT_Y0, TOF_Q1_X1, TOF_Q1_BOT_Y1, s_ui_bg);
+    display_hal_fill_rect(s_dbg_x0, TOF_Q1_BOT_Y0, s_dbg_x1, TOF_Q1_BOT_Y0, pack_rgb565(28u, 32u, 36u));
+    display_hal_fill_rect(s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y1, s_ui_dbg_bg);
+    display_hal_fill_rect(s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y0, pack_rgb565(32u, 38u, 44u));
+
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        const tof_cell_rect_t *c = &s_cells[i];
+        display_hal_fill_rect(c->x0, c->y0, c->x1, c->y1, s_ui_border);
+        display_hal_fill_rect(c->ix0, c->iy0, c->ix1, c->iy1, s_ui_bg);
+    }
+
+    memset(s_cell_drawn, 0, sizeof(s_cell_drawn));
+    memset(s_last_cell_color, 0, sizeof(s_last_cell_color));
+    s_hot_idx = -1;
+    for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+    {
+        s_curve_pick_idx[y] = -1;
+        s_curve_prev_pick_idx[y] = -1;
+    }
+
+    if (force_debug_redraw)
+    {
+        memset(s_dbg_prev, 0, sizeof(s_dbg_prev));
+        s_dbg_force_redraw = true;
+        s_ai_pill_prev_valid = false;
+        s_alert_pill_prev_valid = false;
+    }
+}
+
+static void tof_invalidate_after_popup_overlay(void)
+{
+    tof_scrub_left_panel(true);
+    display_hal_fill_rect(TOF_TP_X0, TOF_TP_Y0, TOF_TP_X1, TOF_TP_Y1, tof_tp_bg_color(255u, true));
+    display_hal_fill_rect(TOF_Q_W, 0, TOF_Q_W, TOF_LCD_H - 1, pack_rgb565(20u, 24u, 28u));
+    s_roll_status_prev_valid = false;
+    s_tp_force_redraw = true;
+    s_tp_prev_rect_valid = false;
+}
+
+static void tof_clear_roll_status_popup(bool live_data)
+{
+    (void)live_data;
+
+    if (!s_alert_popup_prev_drawn)
+    {
+        return;
+    }
+
+    tof_invalidate_after_popup_overlay();
+    s_alert_popup_prev_drawn = false;
+}
+
+static void tof_draw_roll_status_popup(bool live_data, tof_roll_alert_level_t level)
+{
+    int32_t x0 = 0;
+    int32_t y0 = 0;
+    int32_t x1 = 0;
+    int32_t y1 = 0;
+    tof_alert_popup_rect(&x0, &y0, &x1, &y1);
+    if (x1 < x0 || y1 < y0)
+    {
+        return;
+    }
+
+    if (s_alert_popup_prev_drawn &&
+        (s_alert_popup_prev_x0 != x0 || s_alert_popup_prev_y0 != y0 ||
+         s_alert_popup_prev_x1 != x1 || s_alert_popup_prev_y1 != y1))
+    {
+        tof_clear_roll_status_popup(live_data);
+    }
+
+    const char *subtitle = (level == kTofRollAlertEmpty) ? "ROLL EMPTY" : "ROLL LOW";
+    const char *fallback = tof_roll_popup_message(level);
+    const bool two_line = (level == kTofRollAlertLow) || (level == kTofRollAlertEmpty);
+    uint16_t bg = 0u;
+    uint16_t border = 0u;
+    uint16_t fg = 0u;
+    tof_roll_status_style(level, NULL, &bg, &border, &fg);
+
+    uint16_t frame_color = border;
+    uint16_t panel_bg = bg;
+    uint16_t title_fg = pack_rgb565(255u, 248u, 224u);
+    uint16_t sub_fg = fg;
+    const uint16_t shadow_fg = pack_rgb565(10u, 10u, 12u);
+
+    if (level == kTofRollAlertEmpty)
+    {
+        frame_color = pack_rgb565(248u, 140u, 140u);
+        panel_bg = pack_rgb565(72u, 14u, 16u);
+        title_fg = pack_rgb565(255u, 234u, 224u);
+        sub_fg = pack_rgb565(255u, 214u, 206u);
+    }
+    else if (level == kTofRollAlertLow)
+    {
+        frame_color = pack_rgb565(246u, 214u, 96u);
+        panel_bg = pack_rgb565(92u, 76u, 20u);
+        title_fg = pack_rgb565(255u, 248u, 218u);
+        sub_fg = pack_rgb565(252u, 240u, 190u);
+    }
+
+    display_hal_fill_rect(x0, y0, x1, y1, frame_color);
+    if ((x1 - x0) >= 2 && (y1 - y0) >= 2)
+    {
+        display_hal_fill_rect(x0 + 1, y0 + 1, x1 - 1, y1 - 1, panel_bg);
+    }
+
+    const int32_t ix0 = x0 + 1;
+    const int32_t iy0 = y0 + 1;
+    const int32_t ix1 = x1 - 1;
+
+    if (two_line)
+    {
+        const char *hint = (level == kTofRollAlertEmpty) ? "Replace spool To Reset" : NULL;
+        const size_t hint_n = (hint != NULL) ? strlen(hint) : 0u;
+        const int32_t avail_w = (ix1 - ix0 + 1) - 4;
+        uint32_t title_scale = 4u;
+        uint32_t sub_scale = 3u;
+        uint32_t hint_scale = 2u;
+        int32_t title_adv = (TOF_DBG_CHAR_W * (int32_t)title_scale) + 2;
+        int32_t sub_adv = (TOF_DBG_CHAR_W * (int32_t)sub_scale) + 2;
+        int32_t hint_adv = (TOF_DBG_CHAR_W * (int32_t)hint_scale) + 2;
+        const size_t title_n = strlen("WARNING");
+        const size_t sub_n = strlen(subtitle);
+        int32_t title_w = (title_n > 0u) ? ((int32_t)(title_n * (size_t)title_adv) - 2) : 0;
+        int32_t sub_w = (sub_n > 0u) ? ((int32_t)(sub_n * (size_t)sub_adv) - 2) : 0;
+        int32_t hint_w = (hint_n > 0u) ? ((int32_t)(hint_n * (size_t)hint_adv) - 2) : 0;
+        if (title_w > avail_w)
+        {
+            title_scale = 2u;
+            title_adv = (TOF_DBG_CHAR_W * (int32_t)title_scale) + 2;
+            title_w = (title_n > 0u) ? ((int32_t)(title_n * (size_t)title_adv) - 2) : 0;
+        }
+        if (sub_w > avail_w)
+        {
+            sub_scale = 1u;
+            sub_adv = (TOF_DBG_CHAR_W * (int32_t)sub_scale) + 2;
+            sub_w = (sub_n > 0u) ? ((int32_t)(sub_n * (size_t)sub_adv) - 2) : 0;
+        }
+        if (hint_w > avail_w)
+        {
+            hint_scale = 1u;
+            hint_adv = (TOF_DBG_CHAR_W * (int32_t)hint_scale) + 2;
+            hint_w = (hint_n > 0u) ? ((int32_t)(hint_n * (size_t)hint_adv) - 2) : 0;
+            if (hint_w > avail_w)
+            {
+                hint_w = avail_w;
+            }
+        }
+
+        const int32_t title_h = TOF_DBG_CHAR_H * (int32_t)title_scale;
+        const int32_t sub_h = TOF_DBG_CHAR_H * (int32_t)sub_scale;
+        const int32_t hint_h = (hint_n > 0u) ? (TOF_DBG_CHAR_H * (int32_t)hint_scale) : 0;
+        const int32_t gap = 5;
+        const int32_t hint_gap = (hint_n > 0u) ? 3 : 0;
+        const int32_t total_h = title_h + gap + sub_h + hint_gap + hint_h;
+        int32_t ty0 = y0 + ((y1 - y0 + 1 - total_h) / 2);
+        if (ty0 < (iy0 + 1))
+        {
+            ty0 = iy0 + 1;
+        }
+        int32_t tx0 = x0 + ((x1 - x0 + 1 - title_w) / 2);
+        if (tx0 < (ix0 + 1))
+        {
+            tx0 = ix0 + 1;
+        }
+        for (size_t i = 0u; i < title_n; i++)
+        {
+            tof_tiny_draw_char_scaled_clipped(tx0 + 1,
+                                              ty0 + 1,
+                                              "WARNING"[i],
+                                              shadow_fg,
+                                              title_scale,
+                                              x0,
+                                              y0,
+                                              x1,
+                                              y1);
+            tof_tiny_draw_char_scaled_clipped(tx0,
+                                              ty0,
+                                              "WARNING"[i],
+                                              title_fg,
+                                              title_scale,
+                                              x0,
+                                              y0,
+                                              x1,
+                                              y1);
+            tx0 += title_adv;
+        }
+
+        int32_t sy = ty0 + title_h + gap;
+        if (sy < (iy0 + 1))
+        {
+            sy = iy0 + 1;
+        }
+        int32_t sx = x0 + ((x1 - x0 + 1 - sub_w) / 2);
+        if (sx < (ix0 + 1))
+        {
+            sx = ix0 + 1;
+        }
+        for (size_t i = 0u; i < sub_n; i++)
+        {
+            tof_tiny_draw_char_scaled_clipped(sx + 1, sy + 1, subtitle[i], shadow_fg, sub_scale, x0, y0, x1, y1);
+            tof_tiny_draw_char_scaled_clipped(sx, sy, subtitle[i], sub_fg, sub_scale, x0, y0, x1, y1);
+            sx += sub_adv;
+        }
+
+        if (hint_n > 0u)
+        {
+            int32_t hy = sy + sub_h + hint_gap;
+            if (hy < (iy0 + 1))
+            {
+                hy = iy0 + 1;
+            }
+            int32_t hx = x0 + ((x1 - x0 + 1 - hint_w) / 2);
+            if (hx < (ix0 + 1))
+            {
+                hx = ix0 + 1;
+            }
+            const uint16_t hint_fg = pack_rgb565(255u, 206u, 206u);
+            int32_t max_w = ix1 - hx + 1;
+            int32_t draw_chars = max_w / hint_adv;
+            if (draw_chars < 0)
+            {
+                draw_chars = 0;
+            }
+            if ((size_t)draw_chars > hint_n)
+            {
+                draw_chars = (int32_t)hint_n;
+            }
+            for (int32_t i = 0; i < draw_chars; i++)
+            {
+                tof_tiny_draw_char_scaled_clipped(hx + 1,
+                                                  hy + 1,
+                                                  hint[(size_t)i],
+                                                  shadow_fg,
+                                                  hint_scale,
+                                                  x0,
+                                                  y0,
+                                                  x1,
+                                                  y1);
+                tof_tiny_draw_char_scaled_clipped(hx,
+                                                  hy,
+                                                  hint[(size_t)i],
+                                                  hint_fg,
+                                                  hint_scale,
+                                                  x0,
+                                                  y0,
+                                                  x1,
+                                                  y1);
+                hx += hint_adv;
+            }
+        }
+    }
+    else
+    {
+        const size_t n = strlen(fallback);
+        const int32_t text_w = (n > 0u) ? ((int32_t)(n * TOF_DBG_CHAR_ADV) - 2) : 0;
+        const int32_t text_h = TOF_DBG_CHAR_H * TOF_DBG_SCALE;
+        int32_t tx = x0 + ((x1 - x0 + 1 - text_w) / 2);
+        int32_t ty = y0 + ((y1 - y0 + 1 - text_h) / 2);
+        if (tx < (ix0 + 1))
+        {
+            tx = ix0 + 1;
+        }
+        if (ty < (iy0 + 1))
+        {
+            ty = iy0 + 1;
+        }
+
+        for (size_t i = 0u; i < n; i++)
+        {
+            tof_tiny_draw_char_clipped(tx + 1, ty + 1, fallback[i], shadow_fg, x0, y0, x1, y1);
+            tof_tiny_draw_char_clipped(tx, ty, fallback[i], sub_fg, x0, y0, x1, y1);
+            tx += TOF_DBG_CHAR_ADV;
+        }
+    }
+
+    s_alert_popup_prev_drawn = true;
+    s_alert_popup_prev_level = level;
+    s_alert_popup_last_live = live_data;
+    s_alert_popup_prev_x0 = (int16_t)x0;
+    s_alert_popup_prev_y0 = (int16_t)y0;
+    s_alert_popup_prev_x1 = (int16_t)x1;
+    s_alert_popup_prev_y1 = (int16_t)y1;
+}
+
+static void tof_update_roll_alert_ui(uint32_t fullness_q10, bool live_data, uint32_t tick)
+{
+    if (fullness_q10 > 1024u)
+    {
+        fullness_q10 = 1024u;
+    }
+
+    uint16_t level_mm = s_roll_model_mm;
+    if (level_mm == 0u)
+    {
+        level_mm = s_tp_live_actual_mm;
+    }
+    tof_roll_alert_level_t level = tof_roll_alert_level_from_model_mm(level_mm);
+
+    const bool warning_level = (level == kTofRollAlertLow) || (level == kTofRollAlertEmpty);
+    const bool hard_empty_popup = (level == kTofRollAlertEmpty);
+    tof_draw_alert_pill(s_alert_runtime_on);
+    tof_draw_roll_status_banner(level, live_data);
+
+    const bool level_changed = (!s_roll_alert_prev_valid || (s_roll_alert_prev_level != level));
+    if (level_changed)
+    {
+        s_roll_alert_prev_level = level;
+        s_roll_alert_prev_valid = true;
+    }
+
+    const bool live_full_sample = (((s_tp_live_actual_mm > 0u) &&
+                                    (s_tp_live_actual_mm <= TOF_ROLL_FULL_CAPTURE_MM)) ||
+                                   ((s_tp_live_closest_mm > 0u) &&
+                                    (s_tp_live_closest_mm <= TOF_ROLL_FULL_CAPTURE_MM)) ||
+                                   ((s_roll_model_mm > 0u) &&
+                                    (s_roll_model_mm <= TOF_ROLL_FULL_CAPTURE_MM)));
+    if (live_full_sample)
+    {
+        if (s_roll_full_rearm_streak < 255u)
+        {
+            s_roll_full_rearm_streak++;
+        }
+    }
+    else
+    {
+        s_roll_full_rearm_streak = 0u;
+    }
+
+    const bool live_full_reset = (s_roll_full_rearm_streak >= TOF_ROLL_FULL_REARM_STREAK);
+    const bool level_full_valid = (level_mm > 0u) &&
+                                  (level_mm <= TOF_ROLL_MEDIUM_TRIGGER_MM);
+    const bool forced_full_capture = s_alert_popup_hold_empty &&
+                                     (s_tp_live_closest_mm > 0u) &&
+                                     (s_tp_live_closest_mm <= TOF_ROLL_FULL_CAPTURE_MM);
+    const bool full_reset = live_full_reset || level_full_valid || forced_full_capture;
+    if (full_reset)
+    {
+        s_roll_full_rearm_streak = 0u;
+        s_alert_low_popup_shown = false;
+        s_alert_popup_hold_empty = false;
+        s_alert_popup_rearm_on_full = true;
+        s_alert_popup_active = false;
+    }
+
+    if (!s_alert_runtime_on)
+    {
+        s_alert_popup_active = false;
+        s_alert_popup_hold_empty = false;
+        if (s_alert_popup_prev_drawn || s_dbg_force_redraw)
+        {
+            tof_clear_roll_status_popup(live_data);
+        }
+        return;
+    }
+
+    if (s_alert_popup_hold_empty)
+    {
+        s_alert_popup_active = true;
+        s_alert_popup_level = kTofRollAlertEmpty;
+    }
+    else if (hard_empty_popup)
+    {
+        s_alert_popup_active = true;
+        s_alert_popup_level = kTofRollAlertEmpty;
+        s_alert_popup_until_tick = 0u;
+        s_alert_popup_prev_drawn = false;
+        s_alert_popup_hold_empty = true;
+        s_alert_popup_rearm_on_full = false;
+    }
+    else if (level_changed &&
+             warning_level &&
+             s_alert_popup_rearm_on_full &&
+             ((level != kTofRollAlertLow) || !s_alert_low_popup_shown))
+    {
+        s_alert_popup_active = true;
+        s_alert_popup_level = (level == kTofRollAlertEmpty) ? kTofRollAlertLow : level;
+        s_alert_popup_until_tick = tick + TOF_ALERT_POPUP_TICKS;
+        s_alert_popup_prev_drawn = false;
+        s_alert_popup_rearm_on_full = false;
+        if (level == kTofRollAlertLow)
+        {
+            s_alert_low_popup_shown = true;
+        }
+    }
+
+    if (s_alert_popup_active &&
+        !s_alert_popup_hold_empty &&
+        ((int32_t)(tick - s_alert_popup_until_tick) >= 0))
+    {
+        s_alert_popup_active = false;
+    }
+
+    if (s_alert_popup_active)
+    {
+        if (!s_alert_popup_prev_drawn ||
+            s_dbg_force_redraw ||
+            (s_alert_popup_prev_level != s_alert_popup_level))
+        {
+            tof_draw_roll_status_popup(live_data, s_alert_popup_level);
+        }
+    }
+    else if (s_alert_popup_prev_drawn)
+    {
+        tof_clear_roll_status_popup(live_data);
+    }
+}
+
+static void tof_touch_delay_ms(uint32_t delay_ms)
+{
+    SDK_DelayAtLeastUs(delay_ms * 1000u, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+}
+
+static status_t tof_touch_i2c_send(uint8_t deviceAddress,
+                                   uint32_t subAddress,
+                                   uint8_t subaddressSize,
+                                   const uint8_t *txBuff,
+                                   uint8_t txBuffSize)
+{
+    lpi2c_master_transfer_t xfer;
+    memset(&xfer, 0, sizeof(xfer));
+    xfer.flags = kLPI2C_TransferDefaultFlag;
+    xfer.slaveAddress = deviceAddress;
+    xfer.direction = kLPI2C_Write;
+    xfer.subaddress = subAddress;
+    xfer.subaddressSize = subaddressSize;
+    xfer.data = (uint8_t *)(uintptr_t)txBuff;
+    xfer.dataSize = txBuffSize;
+    return LPI2C_MasterTransferBlocking(TOF_TOUCH_I2C, &xfer);
+}
+
+static status_t tof_touch_i2c_receive(uint8_t deviceAddress,
+                                      uint32_t subAddress,
+                                      uint8_t subaddressSize,
+                                      uint8_t *rxBuff,
+                                      uint8_t rxBuffSize)
+{
+    lpi2c_master_transfer_t xfer;
+    memset(&xfer, 0, sizeof(xfer));
+    xfer.flags = kLPI2C_TransferDefaultFlag;
+    xfer.slaveAddress = deviceAddress;
+    xfer.direction = kLPI2C_Read;
+    xfer.subaddress = subAddress;
+    xfer.subaddressSize = subaddressSize;
+    xfer.data = rxBuff;
+    xfer.dataSize = rxBuffSize;
+    return LPI2C_MasterTransferBlocking(TOF_TOUCH_I2C, &xfer);
+}
+
+static void tof_touch_config_int_pin(gt911_int_pin_mode_t mode)
+{
+    CLOCK_EnableClock(kCLOCK_Port4);
+
+    port_pin_config_t cfg = {
+        .pullSelect = kPORT_PullDown,
+        .pullValueSelect = kPORT_LowPullResistor,
+        .slewRate = kPORT_FastSlewRate,
+        .passiveFilterEnable = kPORT_PassiveFilterDisable,
+        .openDrainEnable = kPORT_OpenDrainDisable,
+        .driveStrength = kPORT_LowDriveStrength,
+#if defined(FSL_FEATURE_PORT_HAS_DRIVE_STRENGTH1) && FSL_FEATURE_PORT_HAS_DRIVE_STRENGTH1
+        .driveStrength1 = kPORT_NormalDriveStrength,
+#endif
+        .mux = kPORT_MuxAlt0,
+        .inputBuffer = kPORT_InputBufferEnable,
+        .invertInput = kPORT_InputNormal,
+        .lockRegister = kPORT_UnlockRegister,
+    };
+
+    switch (mode)
+    {
+        case kGT911_IntPinPullUp:
+            cfg.pullSelect = kPORT_PullUp;
+            break;
+        case kGT911_IntPinPullDown:
+            cfg.pullSelect = kPORT_PullDown;
+            break;
+        case kGT911_IntPinInput:
+            cfg.pullSelect = kPORT_PullDisable;
+            break;
+        default:
+            break;
+    }
+
+    PORT_SetPinConfig(TOF_TOUCH_INT_PORT, TOF_TOUCH_INT_PIN, &cfg);
+}
+
+static void tof_touch_config_reset_pin(bool pullUp)
+{
+    (void)pullUp;
+}
+
+static void tof_touch_init(void)
+{
+    s_touch_ready = false;
+    s_touch_was_down = false;
+    s_touch_last_poll_tick = 0u;
+
+    gt911_config_t cfg = {
+        .I2C_SendFunc = tof_touch_i2c_send,
+        .I2C_ReceiveFunc = tof_touch_i2c_receive,
+        .timeDelayMsFunc = tof_touch_delay_ms,
+        .intPinFunc = tof_touch_config_int_pin,
+        .pullResetPinFunc = tof_touch_config_reset_pin,
+        .touchPointNum = TOF_TOUCH_POINTS,
+        .i2cAddrMode = kGT911_I2cAddrAny,
+        .intTrigMode = kGT911_IntFallingEdge,
+    };
+
+    const status_t st = GT911_Init(&s_touch_handle, &cfg);
+    if (st == kStatus_Success)
+    {
+        s_touch_ready = true;
+        PRINTF("TOF touch: GT911 ready (%u x %u)\r\n",
+               (unsigned)s_touch_handle.resolutionX,
+               (unsigned)s_touch_handle.resolutionY);
+    }
+    else
+    {
+        PRINTF("TOF touch: GT911 init failed: %d\r\n", (int)st);
+    }
+}
+
+static bool tof_touch_get_point(int32_t *x_out, int32_t *y_out)
+{
+    if (!s_touch_ready || x_out == NULL || y_out == NULL)
+    {
+        return false;
+    }
+
+    touch_point_t points[TOF_TOUCH_POINTS];
+    uint8_t point_count = TOF_TOUCH_POINTS;
+    const status_t st = GT911_GetMultiTouch(&s_touch_handle, &point_count, points);
+    if (st != kStatus_Success)
+    {
+        return false;
+    }
+
+    const touch_point_t *selected = NULL;
+    for (uint8_t i = 0u; i < point_count; i++)
+    {
+        if (points[i].valid && points[i].touchID == 0u)
+        {
+            selected = &points[i];
+            break;
+        }
+    }
+    if (selected == NULL)
+    {
+        for (uint8_t i = 0u; i < point_count; i++)
+        {
+            if (points[i].valid)
+            {
+                selected = &points[i];
+                break;
+            }
+        }
+    }
+    if (selected == NULL)
+    {
+        return false;
+    }
+
+    const int32_t res_x = (s_touch_handle.resolutionX > 0u) ? (int32_t)s_touch_handle.resolutionX : TOF_LCD_W;
+    int32_t x = (int32_t)selected->y;
+    int32_t y = res_x - (int32_t)selected->x;
+    x = tof_clamp_i32(x, 0, TOF_LCD_W - 1);
+    y = tof_clamp_i32(y, 0, TOF_LCD_H - 1);
+
+    *x_out = x;
+    *y_out = y;
+    return true;
+}
+
+static void tof_touch_poll_ai_toggle(uint32_t tick)
+{
+    if (!s_touch_ready)
+    {
+        return;
+    }
+
+    if ((uint32_t)(tick - s_touch_last_poll_tick) < TOF_TOUCH_POLL_TICKS)
+    {
+        return;
+    }
+    s_touch_last_poll_tick = tick;
+
+    int32_t tx = 0;
+    int32_t ty = 0;
+    const bool pressed = tof_touch_get_point(&tx, &ty);
+    const bool in_ai_pill = pressed &&
+                            tx >= s_ai_pill_x0 && tx <= s_ai_pill_x1 &&
+                            ty >= s_ai_pill_y0 && ty <= s_ai_pill_y1;
+    const bool in_alert_pill = pressed &&
+                               tx >= s_alert_pill_x0 && tx <= s_alert_pill_x1 &&
+                               ty >= s_alert_pill_y0 && ty <= s_alert_pill_y1;
+
+    if (in_ai_pill && !s_touch_was_down)
+    {
+        s_ai_runtime_on = !s_ai_runtime_on;
+        tof_ai_grid_reset();
+        s_dbg_force_redraw = true;
+        s_tp_force_redraw = true;
+        s_ai_pill_prev_valid = false;
+        s_alert_pill_prev_valid = false;
+        PRINTF("TOF AI: %s\r\n", s_ai_runtime_on ? "ON" : "OFF");
+    }
+    else if (in_alert_pill && !s_touch_was_down)
+    {
+        s_alert_runtime_on = !s_alert_runtime_on;
+        s_dbg_force_redraw = true;
+        s_alert_pill_prev_valid = false;
+        s_roll_alert_prev_valid = false;
+        if (!s_alert_runtime_on)
+        {
+            s_alert_popup_active = false;
+            s_alert_popup_hold_empty = false;
+            s_roll_full_rearm_streak = 0u;
+        }
+        PRINTF("TOF ALERT: %s\r\n", s_alert_runtime_on ? "ON" : "OFF");
+    }
+
+    s_touch_was_down = pressed;
+}
+
 static void tof_calc_frame_stats(const uint16_t mm[64],
                                  uint32_t *valid_count,
                                  uint16_t *min_mm,
@@ -481,6 +1534,30 @@ static void tof_calc_frame_stats(const uint16_t mm[64],
     if (min_mm) *min_mm = (valid > 0u) ? min_v : 0u;
     if (max_mm) *max_mm = (valid > 0u) ? max_v : 0u;
     if (avg_mm) *avg_mm = (valid > 0u) ? (uint16_t)(sum / valid) : 0u;
+}
+
+static const uint16_t *tof_calc_metric_frame(const uint16_t mm[64], bool live_data)
+{
+    if (!live_data || !s_ai_runtime_on)
+    {
+        return mm;
+    }
+
+    static uint16_t metric_mm[64];
+    uint16_t repaired_mm[64];
+    tof_ai_denoise_heatmap_frame(mm, metric_mm, live_data);
+    tof_fill_display_holes(metric_mm, repaired_mm);
+    memcpy(metric_mm, repaired_mm, sizeof(repaired_mm));
+    tof_repair_corner_blindspots(metric_mm);
+
+    uint32_t filtered_valid = 0u;
+    tof_calc_frame_stats(metric_mm, &filtered_valid, NULL, NULL, NULL);
+    if (filtered_valid >= TOF_EST_VALID_MIN)
+    {
+        return metric_mm;
+    }
+
+    return mm;
 }
 
 static uint16_t tof_calc_actual_distance_mm(const uint16_t mm[64])
@@ -518,6 +1595,405 @@ static uint16_t tof_calc_actual_distance_mm(const uint16_t mm[64])
     }
 
     return 0u;
+}
+
+static uint16_t tof_apply_tp_mm_shift(uint16_t mm)
+{
+    if (mm == 0u)
+    {
+        return 0u;
+    }
+
+    int32_t shifted = (int32_t)mm + TOF_TP_MM_SHIFT;
+    if (shifted < (int32_t)TOF_TP_MM_CLIP_MIN)
+    {
+        shifted = (int32_t)TOF_TP_MM_CLIP_MIN;
+    }
+    if (shifted > (int32_t)TOF_TP_MM_CLIP_MAX)
+    {
+        shifted = (int32_t)TOF_TP_MM_CLIP_MAX;
+    }
+    return (uint16_t)shifted;
+}
+
+static uint16_t tof_calc_roll_curve_distance_mm(const uint16_t mm[64], int16_t row_pick_idx_out[TOF_GRID_H])
+{
+    uint16_t row_near_mm[TOF_GRID_H];
+    uint32_t row_count = 0u;
+
+    if (row_pick_idx_out != NULL)
+    {
+        for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+        {
+            row_pick_idx_out[y] = -1;
+        }
+    }
+
+    for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+    {
+        uint16_t low0 = 0xFFFFu;
+        uint16_t low1 = 0xFFFFu;
+        int32_t low0_idx = -1;
+        uint32_t valid = 0u;
+        const uint32_t row_base = y * TOF_GRID_W;
+        uint32_t x_start = TOF_TP_CURVE_EDGE_GUARD_COLS;
+        uint32_t x_end = TOF_GRID_W - TOF_TP_CURVE_EDGE_GUARD_COLS;
+        if (x_start >= x_end)
+        {
+            x_start = 0u;
+            x_end = TOF_GRID_W;
+        }
+
+        for (uint32_t x = x_start; x < x_end; x++)
+        {
+            const uint16_t v = mm[row_base + x];
+            if (!tof_mm_valid(v))
+            {
+                continue;
+            }
+
+            valid++;
+            if (v < low0)
+            {
+                low1 = low0;
+                low0 = v;
+                low0_idx = (int32_t)(row_base + x);
+            }
+            else if (v < low1)
+            {
+                low1 = v;
+            }
+        }
+
+        if (valid == 0u || low0 == 0xFFFFu)
+        {
+            continue;
+        }
+        if (row_pick_idx_out != NULL)
+        {
+            row_pick_idx_out[y] = (int16_t)low0_idx;
+        }
+
+        uint16_t row_mm = low0;
+        if (valid >= 3u && low1 != 0xFFFFu)
+        {
+            /* Use second-nearest sample per row to reduce single-pixel near outliers. */
+            row_mm = low1;
+        }
+        else if (valid >= 2u && low1 != 0xFFFFu)
+        {
+            row_mm = (uint16_t)(((uint32_t)low0 + (uint32_t)low1 + 1u) / 2u);
+        }
+        row_near_mm[row_count++] = row_mm;
+    }
+
+    if (row_count < TOF_TP_CURVE_MIN_ROWS)
+    {
+        return 0u;
+    }
+
+    for (uint32_t i = 1u; i < row_count; i++)
+    {
+        const uint16_t key = row_near_mm[i];
+        uint32_t j = i;
+        while (j > 0u && row_near_mm[j - 1u] > key)
+        {
+            row_near_mm[j] = row_near_mm[j - 1u];
+            j--;
+        }
+        row_near_mm[j] = key;
+    }
+
+    if ((row_count & 1u) == 0u)
+    {
+        const uint16_t a = row_near_mm[(row_count / 2u) - 1u];
+        const uint16_t b = row_near_mm[row_count / 2u];
+        return (uint16_t)(((uint32_t)a + (uint32_t)b + 1u) / 2u);
+    }
+    return row_near_mm[row_count / 2u];
+}
+
+static uint16_t tof_abs_diff_u16(uint16_t a, uint16_t b)
+{
+    return (a > b) ? (uint16_t)(a - b) : (uint16_t)(b - a);
+}
+
+static uint32_t tof_abs_diff_u32(uint32_t a, uint32_t b)
+{
+    return (a > b) ? (a - b) : (b - a);
+}
+
+static uint32_t tof_tp_fullness_q10_from_mm_q8_bounds(uint32_t mm_q8, uint16_t near_mm, uint16_t far_mm)
+{
+    if (mm_q8 == 0u)
+    {
+        return 640u;
+    }
+
+    if (far_mm <= near_mm)
+    {
+        far_mm = (uint16_t)(near_mm + 1u);
+    }
+
+    const uint32_t near_q8 = ((uint32_t)near_mm << 8);
+    const uint32_t far_q8 = ((uint32_t)far_mm << 8);
+
+    if (mm_q8 <= near_q8)
+    {
+        return 1024u;
+    }
+
+    if (mm_q8 >= far_q8)
+    {
+        return 0u;
+    }
+
+    return ((far_q8 - mm_q8) * 1024u) / (far_q8 - near_q8);
+}
+
+static bool tof_estimator_measure_mm_q8(const uint16_t mm[64],
+                                        uint32_t *mm_q8_out,
+                                        uint32_t *valid_out,
+                                        uint16_t *spread_out)
+{
+    uint16_t values[64];
+    uint32_t count = 0u;
+    uint32_t center_sum = 0u;
+    uint32_t center_count = 0u;
+    uint16_t min_mm = 0xFFFFu;
+    uint16_t max_mm = 0u;
+
+    for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+    {
+        for (uint32_t x = 0u; x < TOF_GRID_W; x++)
+        {
+            const uint16_t v = mm[(y * TOF_GRID_W) + x];
+            if (!tof_mm_valid(v))
+            {
+                continue;
+            }
+
+            values[count++] = v;
+            if (v < min_mm)
+            {
+                min_mm = v;
+            }
+            if (v > max_mm)
+            {
+                max_mm = v;
+            }
+            if ((x >= 2u && x <= 5u) && (y >= 2u && y <= 5u))
+            {
+                center_sum += v;
+                center_count++;
+            }
+        }
+    }
+
+    if (valid_out)
+    {
+        *valid_out = count;
+    }
+    if (spread_out)
+    {
+        *spread_out = (count > 0u) ? (uint16_t)(max_mm - min_mm) : 0u;
+    }
+
+    if (count < TOF_EST_VALID_MIN)
+    {
+        return false;
+    }
+
+    for (uint32_t i = 1u; i < count; i++)
+    {
+        uint16_t key = values[i];
+        int32_t j = (int32_t)i - 1;
+        while (j >= 0 && values[(uint32_t)j] > key)
+        {
+            values[(uint32_t)j + 1u] = values[(uint32_t)j];
+            j--;
+        }
+        values[(uint32_t)j + 1u] = key;
+    }
+
+    uint32_t trim = count / 8u;
+    if ((trim * 2u) >= count)
+    {
+        trim = 0u;
+    }
+
+    uint32_t sum = 0u;
+    uint32_t keep = 0u;
+    for (uint32_t i = trim; i < (count - trim); i++)
+    {
+        sum += values[i];
+        keep++;
+    }
+    if (keep == 0u)
+    {
+        return false;
+    }
+
+    uint32_t mean_mm = (sum + (keep / 2u)) / keep;
+    if (center_count >= 4u)
+    {
+        const uint32_t center_mm = (center_sum + (center_count / 2u)) / center_count;
+        mean_mm = (((mean_mm * 3u) + (center_mm * 2u)) + 2u) / 5u;
+    }
+
+    if (mm_q8_out)
+    {
+        *mm_q8_out = (mean_mm << 8);
+    }
+    return true;
+}
+
+static uint16_t tof_estimator_confidence_q10(uint32_t valid_count, uint16_t spread_mm, bool live_data)
+{
+    uint32_t valid_q10 = 0u;
+    uint32_t spread_q10 = 0u;
+
+    if (valid_count > TOF_EST_VALID_MIN)
+    {
+        valid_q10 = ((valid_count - TOF_EST_VALID_MIN) * 1024u) / (64u - TOF_EST_VALID_MIN);
+        if (valid_q10 > 1024u)
+        {
+            valid_q10 = 1024u;
+        }
+    }
+
+    if (spread_mm <= TOF_EST_SPREAD_GOOD_MM)
+    {
+        spread_q10 = 1024u;
+    }
+    else if (spread_mm >= TOF_EST_SPREAD_BAD_MM)
+    {
+        spread_q10 = 0u;
+    }
+    else
+    {
+        spread_q10 =
+            (((uint32_t)(TOF_EST_SPREAD_BAD_MM - spread_mm)) * 1024u) /
+            ((uint32_t)(TOF_EST_SPREAD_BAD_MM - TOF_EST_SPREAD_GOOD_MM));
+    }
+
+    uint32_t conf = (valid_q10 + spread_q10) / 2u;
+    if (!live_data)
+    {
+        conf = (conf * 3u) / 4u;
+    }
+    if (conf > 1024u)
+    {
+        conf = 1024u;
+    }
+    return (uint16_t)conf;
+}
+
+static void tof_estimator_update(const uint16_t mm[64], bool live_data)
+{
+#if TOF_EST_ENABLE
+    uint32_t measured_mm_q8 = 0u;
+    uint32_t valid_count = 0u;
+    uint16_t spread_mm = 0u;
+    const bool have_meas = tof_estimator_measure_mm_q8(mm, &measured_mm_q8, &valid_count, &spread_mm);
+
+    if (have_meas)
+    {
+        const uint16_t conf_q10 = tof_estimator_confidence_q10(valid_count, spread_mm, live_data);
+        s_est_valid_count = valid_count;
+        s_est_spread_mm = spread_mm;
+        s_est_conf_q10 = conf_q10;
+
+        if (s_est_mm_q8 == 0u)
+        {
+            s_est_mm_q8 = measured_mm_q8;
+        }
+        else
+        {
+            const uint32_t delta_q8 = tof_abs_diff_u32(s_est_mm_q8, measured_mm_q8);
+            uint32_t den = 8u;
+            if ((delta_q8 >= ((uint32_t)TOF_EST_FAST_DELTA_MM << 8)) && (conf_q10 >= 512u))
+            {
+                den = 2u;
+            }
+            else if (conf_q10 >= 512u)
+            {
+                den = 4u;
+            }
+            else if (conf_q10 >= 256u)
+            {
+                den = 6u;
+            }
+
+            s_est_mm_q8 = ((s_est_mm_q8 * (den - 1u)) + measured_mm_q8 + (den / 2u)) / den;
+        }
+
+        uint16_t est_mm = (uint16_t)(s_est_mm_q8 >> 8);
+        if (conf_q10 >= TOF_EST_CONF_TRAIN_MIN_Q10)
+        {
+            if (est_mm <= (uint16_t)(s_est_near_mm + 20u))
+            {
+                s_est_near_mm = (uint16_t)((((uint32_t)s_est_near_mm * 31u) + est_mm + 16u) / 32u);
+            }
+            if (est_mm >= (uint16_t)(s_est_far_mm - 20u))
+            {
+                s_est_far_mm = (uint16_t)((((uint32_t)s_est_far_mm * 31u) + est_mm + 16u) / 32u);
+            }
+        }
+
+        if (s_est_near_mm < TOF_EST_NEAR_MIN_MM)
+        {
+            s_est_near_mm = TOF_EST_NEAR_MIN_MM;
+        }
+        if (s_est_near_mm > TOF_EST_NEAR_MAX_MM)
+        {
+            s_est_near_mm = TOF_EST_NEAR_MAX_MM;
+        }
+        if (s_est_far_mm < TOF_EST_FAR_MIN_MM)
+        {
+            s_est_far_mm = TOF_EST_FAR_MIN_MM;
+        }
+        if (s_est_far_mm > TOF_EST_FAR_MAX_MM)
+        {
+            s_est_far_mm = TOF_EST_FAR_MAX_MM;
+        }
+        if (s_est_far_mm < (uint16_t)(s_est_near_mm + TOF_EST_MIN_GAP_MM))
+        {
+            s_est_far_mm = (uint16_t)(s_est_near_mm + TOF_EST_MIN_GAP_MM);
+            if (s_est_far_mm > TOF_EST_FAR_MAX_MM)
+            {
+                s_est_far_mm = TOF_EST_FAR_MAX_MM;
+                if (s_est_far_mm > TOF_EST_MIN_GAP_MM)
+                {
+                    s_est_near_mm = (uint16_t)(s_est_far_mm - TOF_EST_MIN_GAP_MM);
+                }
+            }
+        }
+        const uint32_t target_fullness_q10 =
+            tof_tp_fullness_q10_from_mm_q8_bounds(s_est_mm_q8, s_est_near_mm, s_est_far_mm);
+        const uint32_t fullness_delta = tof_abs_diff_u32(s_est_fullness_q10, target_fullness_q10);
+        uint32_t den = 8u;
+        if ((conf_q10 >= 700u) && (fullness_delta >= 96u))
+        {
+            den = 2u;
+        }
+        else if (conf_q10 >= 450u)
+        {
+            den = 4u;
+        }
+        s_est_fullness_q10 =
+            (uint16_t)(((uint32_t)s_est_fullness_q10 * (den - 1u) + target_fullness_q10 + (den / 2u)) / den);
+    }
+    else
+    {
+        s_est_valid_count = 0u;
+        s_est_spread_mm = 0u;
+        s_est_conf_q10 = (uint16_t)(((uint32_t)s_est_conf_q10 * 15u) / 16u);
+    }
+#else
+    (void)mm;
+    (void)live_data;
+#endif
 }
 
 static TOF_UNUSED void tof_ai_region_means(const uint16_t mm[64], uint16_t *center_avg, uint16_t *edge_avg)
@@ -564,6 +2040,11 @@ static TOF_UNUSED void tof_ai_region_means(const uint16_t mm[64], uint16_t *cent
 static void tof_ai_log_frame(const uint16_t mm[64], bool live_data, uint32_t tick, uint32_t fullness_q10)
 {
 #if TOF_AI_DATA_LOG_ENABLE
+    if (!s_ai_runtime_on)
+    {
+        return;
+    }
+
     if (!live_data)
     {
         return;
@@ -586,20 +2067,20 @@ static void tof_ai_log_frame(const uint16_t mm[64], bool live_data, uint32_t tic
     tof_calc_frame_stats(mm, &valid, &min_mm, &max_mm, &avg_mm);
     tof_ai_region_means(mm, &center_avg, &edge_avg);
 
-    PRINTF("AI_CSV,t=%lu,live=%u,valid=%lu,min=%u,max=%u,avg=%u,act=%u,center=%u,edge=%u,full_q10=%lu\r\n",
-           (unsigned long)tick,
+    PRINTF("AI_CSV,t=%u,live=%u,valid=%u,min=%u,max=%u,avg=%u,act=%u,center=%u,edge=%u,full_q10=%u\r\n",
+           (unsigned)tick,
            1u,
-           (unsigned long)valid,
+           (unsigned)valid,
            (unsigned)min_mm,
            (unsigned)max_mm,
            (unsigned)avg_mm,
            (unsigned)actual_mm,
            (unsigned)center_avg,
            (unsigned)edge_avg,
-           (unsigned long)fullness_q10);
+           (unsigned)fullness_q10);
 
 #if TOF_AI_DATA_LOG_FULL_FRAME
-    PRINTF("AI_F64,t=%lu", (unsigned long)tick);
+    PRINTF("AI_F64,t=%u", (unsigned)tick);
     for (uint32_t i = 0u; i < 64u; i++)
     {
         PRINTF(",%u", (unsigned)mm[i]);
@@ -684,40 +2165,18 @@ static void tof_draw_filled_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t 
     }
 }
 
-static uint32_t tof_tp_fullness_q10_from_mm_q8(uint32_t mm_q8)
+static uint32_t TOF_UNUSED tof_tp_fullness_q10_from_mm_q8(uint32_t mm_q8)
 {
-    if (mm_q8 == 0u)
-    {
-        return 640u;
-    }
-
-    const uint32_t near_q8 = ((uint32_t)TOF_TP_MM_FULL_NEAR << 8);
-    const uint32_t far_q8 = ((uint32_t)TOF_TP_MM_EMPTY_FAR << 8);
-
-    if (mm_q8 <= near_q8)
-    {
-        return 1024u;
-    }
-
-    if (mm_q8 >= far_q8)
-    {
-        return 0u;
-    }
-
-    return ((far_q8 - mm_q8) * 1024u) / (far_q8 - near_q8);
+    return tof_tp_fullness_q10_from_mm_q8_bounds(mm_q8, TOF_TP_MM_FULL_NEAR, TOF_TP_MM_EMPTY_FAR);
 }
 
 static uint16_t tof_tp_bg_color(uint32_t t, bool live_data)
 {
-    uint32_t r = 8u + ((t * 12u) / 255u);
-    uint32_t g = 12u + ((t * 18u) / 255u);
-    uint32_t b = 20u + ((t * 28u) / 255u);
-    if (!live_data)
-    {
-        r = (r * 3u) / 4u;
-        g = (g * 3u) / 4u;
-        b = (b * 3u) / 4u;
-    }
+    (void)t;
+    (void)live_data;
+    uint32_t r = 8u;
+    uint32_t g = 28u;
+    uint32_t b = 64u;
     return pack_rgb565(r, g, b);
 }
 
@@ -826,14 +2285,168 @@ static uint16_t tof_tp_bar_color(uint32_t fullness_q10, bool live_data)
     return pack_rgb565(r, g, b);
 }
 
+static void tof_tp_bar_rect(int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
+{
+    int32_t bx0 = TOF_TP_X0 + TOF_TP_BAR_MARGIN_X;
+    int32_t bx1 = TOF_TP_X1 - TOF_TP_BAR_MARGIN_X;
+    int32_t by1 = TOF_TP_Y1 - 8;
+    int32_t by0 = by1 - TOF_TP_BAR_H;
+    bx0 = tof_clamp_i32(bx0, TOF_TP_X0, TOF_TP_X1);
+    bx1 = tof_clamp_i32(bx1, TOF_TP_X0, TOF_TP_X1);
+    by0 = tof_clamp_i32(by0, TOF_TP_Y0, TOF_TP_Y1);
+    by1 = tof_clamp_i32(by1, TOF_TP_Y0, TOF_TP_Y1);
+    if (x0 != NULL)
+    {
+        *x0 = bx0;
+    }
+    if (y0 != NULL)
+    {
+        *y0 = by0;
+    }
+    if (x1 != NULL)
+    {
+        *x1 = bx1;
+    }
+    if (y1 != NULL)
+    {
+        *y1 = by1;
+    }
+}
+
+static void tof_tp_status_rect(int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
+{
+    int32_t bar_x0 = 0;
+    int32_t bar_y0 = 0;
+    int32_t bar_x1 = 0;
+    int32_t bar_y1 = 0;
+    tof_tp_bar_rect(&bar_x0, &bar_y0, &bar_x1, &bar_y1);
+
+    int32_t sx0 = bar_x0;
+    int32_t sx1 = bar_x1;
+    int32_t sy1 = bar_y0 - TOF_TP_STATUS_GAP_Y;
+    int32_t sy0 = sy1 - TOF_TP_STATUS_H + 1;
+
+    sx0 = tof_clamp_i32(sx0, TOF_TP_X0, TOF_TP_X1);
+    sx1 = tof_clamp_i32(sx1, TOF_TP_X0, TOF_TP_X1);
+    sy0 = tof_clamp_i32(sy0, TOF_TP_Y0, TOF_TP_Y1);
+    sy1 = tof_clamp_i32(sy1, TOF_TP_Y0, TOF_TP_Y1);
+    if (sy1 <= sy0)
+    {
+        sy0 = TOF_TP_Y0 + 2;
+        sy1 = sy0 + TOF_TP_STATUS_H - 1;
+        if (sy1 > TOF_TP_Y1)
+        {
+            sy1 = TOF_TP_Y1;
+            sy0 = tof_clamp_i32(sy1 - TOF_TP_STATUS_H + 1, TOF_TP_Y0, TOF_TP_Y1);
+        }
+    }
+
+    if (x0 != NULL)
+    {
+        *x0 = sx0;
+    }
+    if (y0 != NULL)
+    {
+        *y0 = sy0;
+    }
+    if (x1 != NULL)
+    {
+        *x1 = sx1;
+    }
+    if (y1 != NULL)
+    {
+        *y1 = sy1;
+    }
+}
+
+static uint32_t tof_roll_level_ref_fullness_q10(tof_roll_alert_level_t level)
+{
+    switch (level)
+    {
+        case kTofRollAlertFull:
+            return 1024u;
+        case kTofRollAlertMedium:
+            return 512u;
+        case kTofRollAlertLow:
+            return 256u;
+        case kTofRollAlertEmpty:
+        default:
+            return 0u;
+    }
+}
+
+static void tof_draw_roll_status_banner(tof_roll_alert_level_t level, bool live_data)
+{
+    if (!s_dbg_force_redraw &&
+        s_roll_status_prev_valid &&
+        s_roll_status_prev_level == level &&
+        s_roll_status_prev_live == live_data)
+    {
+        return;
+    }
+
+    int32_t x0 = 0;
+    int32_t y0 = 0;
+    int32_t x1 = 0;
+    int32_t y1 = 0;
+    tof_tp_status_rect(&x0, &y0, &x1, &y1);
+    if (x1 < x0 || y1 < y0)
+    {
+        return;
+    }
+
+    const uint16_t frame = pack_rgb565(40u, 46u, 52u);
+    const uint16_t tray = pack_rgb565(10u, 12u, 14u);
+    display_hal_fill_rect(x0, y0, x1, y1, tray);
+    display_hal_fill_rect(x0, y0, x1, y0, frame);
+    display_hal_fill_rect(x0, y1, x1, y1, frame);
+    display_hal_fill_rect(x0, y0, x0, y1, frame);
+    display_hal_fill_rect(x1, y0, x1, y1, frame);
+
+    const int32_t ix0 = x0 + 2;
+    const int32_t ix1 = x1 - 2;
+    const int32_t iy0 = y0 + 2;
+    const int32_t iy1 = y1 - 2;
+    if (ix1 >= ix0 && iy1 >= iy0)
+    {
+        const uint16_t fill = tof_tp_bar_color(tof_roll_level_ref_fullness_q10(level), live_data);
+        display_hal_fill_rect(ix0, iy0, ix1, iy1, fill);
+    }
+
+    const char *msg = NULL;
+    uint16_t fg = pack_rgb565(246u, 238u, 226u);
+    tof_roll_status_style(level, &msg, NULL, NULL, &fg);
+    const size_t n = strlen(msg);
+    const int32_t text_w = (n > 0u) ? ((int32_t)(n * TOF_DBG_CHAR_ADV) - 2) : 0;
+    const int32_t text_h = TOF_DBG_CHAR_H * TOF_DBG_SCALE;
+    int32_t tx = x0 + ((x1 - x0 + 1 - text_w) / 2);
+    int32_t ty = y0 + ((y1 - y0 + 1 - text_h) / 2);
+    if (tx < (x0 + 2))
+    {
+        tx = x0 + 2;
+    }
+    if (ty < (y0 + 1))
+    {
+        ty = y0 + 1;
+    }
+    for (size_t i = 0u; i < n; i++)
+    {
+        tof_tiny_draw_char_clipped(tx, ty, msg[i], fg, x0, y0, x1, y1);
+        tx += TOF_DBG_CHAR_ADV;
+    }
+
+    s_roll_status_prev_valid = true;
+    s_roll_status_prev_level = level;
+    s_roll_status_prev_live = live_data;
+}
+
 static void tof_draw_fullness_bar(uint32_t fullness_q10, uint32_t mm_q8, bool live_data)
 {
-    const int32_t bar_margin_x = 12;
-    const int32_t bar_h = 18;
-    const int32_t bar_x0 = TOF_TP_X0 + bar_margin_x;
-    const int32_t bar_x1 = TOF_TP_X1 - bar_margin_x;
-    const int32_t bar_y1 = TOF_TP_Y1 - 8;
-    const int32_t bar_y0 = bar_y1 - bar_h;
+    int32_t bar_x0 = 0;
+    int32_t bar_y0 = 0;
+    int32_t bar_x1 = 0;
+    int32_t bar_y1 = 0;
+    tof_tp_bar_rect(&bar_x0, &bar_y0, &bar_x1, &bar_y1);
     if (bar_x1 <= bar_x0 || bar_y1 <= bar_y0)
     {
         return;
@@ -876,231 +2489,295 @@ static void tof_draw_fullness_bar(uint32_t fullness_q10, uint32_t mm_q8, bool li
     (void)mm_q8;
 }
 
-static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32_t tick)
+static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32_t tick, bool draw_enable)
 {
-    if (!s_tp_force_redraw && (uint32_t)(tick - s_tp_last_tick) < TOF_TP_UPDATE_TICKS)
+    const bool force_now = s_tp_force_redraw && draw_enable;
+    if (!force_now && (uint32_t)(tick - s_tp_last_tick) < TOF_TP_UPDATE_TICKS)
     {
         return;
     }
 
-    const uint16_t actual_mm = tof_calc_actual_distance_mm(mm);
-    const uint32_t mm_q8 = (actual_mm > 0u) ? ((uint32_t)actual_mm << 8) : 0u;
-    if (mm_q8 > 0u)
+    /* Keep TP roll/bar scaling on a single measurement path regardless of AI/alert UI state. */
+    const uint16_t *calc_mm = tof_calc_metric_frame(mm, live_data);
+    uint16_t avg_mm = 0u;
+    tof_calc_frame_stats(calc_mm, NULL, NULL, NULL, &avg_mm);
+    uint16_t closest_mm = tof_calc_actual_distance_mm(calc_mm);
+    uint16_t curve_mm = 0u;
+    if (s_ai_runtime_on)
     {
-        if (s_tp_mm_q8 == 0u)
+        curve_mm = tof_calc_roll_curve_distance_mm(calc_mm, NULL);
+    }
+    s_tp_live_closest_mm = tof_apply_tp_mm_shift(closest_mm);
+    curve_mm = tof_apply_tp_mm_shift(curve_mm);
+
+    uint16_t state_mm = avg_mm;
+    if (curve_mm > 0u)
+    {
+        state_mm = curve_mm;
+    }
+    else if (state_mm == 0u)
+    {
+        state_mm = closest_mm;
+    }
+    state_mm = tof_apply_tp_mm_shift(state_mm);
+    if (s_ai_runtime_on && (state_mm > 0u))
+    {
+        uint32_t biased_mm = (uint32_t)state_mm + (uint32_t)TOF_AI_MODEL_MM_BIAS;
+        if (biased_mm > TOF_TP_MM_CLIP_MAX)
         {
-            s_tp_mm_q8 = mm_q8;
+            biased_mm = TOF_TP_MM_CLIP_MAX;
+        }
+        state_mm = (uint16_t)biased_mm;
+    }
+    s_tp_live_actual_mm = state_mm;
+
+    uint16_t actual_mm = state_mm;
+    if (s_alert_popup_hold_empty &&
+        (s_tp_live_closest_mm > 0u) &&
+        (s_tp_live_closest_mm <= TOF_ROLL_FULL_CAPTURE_MM) &&
+        ((s_tp_live_closest_mm + 8u) < actual_mm))
+    {
+        /* Only use aggressive closest-pixel pull while recovering from EMPTY hold. */
+        actual_mm = s_tp_live_closest_mm;
+    }
+
+    bool snap_extreme = false;
+    const uint32_t raw_mm_q8 = (actual_mm > 0u) ? ((uint32_t)actual_mm << 8) : 0u;
+    if (raw_mm_q8 > 0u)
+    {
+        uint16_t snap_mm = actual_mm;
+        snap_extreme = (snap_mm <= (TOF_TP_MM_FULL_NEAR + 2u)) ||
+                       (snap_mm > TOF_ROLL_EMPTY_TRIGGER_MM);
+        if (s_tp_mm_q8 == 0u || snap_extreme)
+        {
+            s_tp_mm_q8 = ((uint32_t)snap_mm << 8);
         }
         else
         {
-            /* Faster low-pass response for ~100ms roll/bar updates. */
-            s_tp_mm_q8 = ((s_tp_mm_q8 * 1u) + mm_q8 + 1u) / 2u;
+            uint32_t delta_q8 = (s_tp_mm_q8 > raw_mm_q8) ? (s_tp_mm_q8 - raw_mm_q8) : (raw_mm_q8 - s_tp_mm_q8);
+            if (delta_q8 >= (6u << 8))
+            {
+                s_tp_mm_q8 = (s_tp_mm_q8 + raw_mm_q8 + 1u) / 2u;
+            }
+            else
+            {
+                s_tp_mm_q8 = ((s_tp_mm_q8 * 3u) + raw_mm_q8 + 2u) / 4u;
+            }
         }
     }
-    /* Keep last valid distance persistent across live gaps. */
 
-    const uint32_t fullness_q10 = tof_tp_fullness_q10_from_mm_q8(s_tp_mm_q8);
+    uint32_t model_mm_q8 = s_tp_mm_q8;
+
+#if TOF_EST_ENABLE
+    if (s_ai_runtime_on)
+    {
+        tof_estimator_update(calc_mm, live_data);
+    }
+#endif
+    uint32_t fullness_q10 = tof_tp_fullness_q10_from_mm_q8_bounds(model_mm_q8,
+                                                                   TOF_TP_MM_FULL_NEAR,
+                                                                   TOF_TP_BAR_MM_EMPTY);
+    if (fullness_q10 > 1024u)
+    {
+        fullness_q10 = 1024u;
+    }
+    uint32_t bar_fullness_q10 = fullness_q10;
+    if (bar_fullness_q10 > 1024u)
+    {
+        bar_fullness_q10 = 1024u;
+    }
+    uint16_t bar_fullness_draw_q10 = (uint16_t)((((bar_fullness_q10 + 4u) / 8u) * 8u));
+    if (bar_fullness_draw_q10 > 1024u)
+    {
+        bar_fullness_draw_q10 = 1024u;
+    }
+    s_roll_fullness_q10 = (uint16_t)fullness_q10;
+    s_roll_model_mm = (model_mm_q8 > 0u) ? (uint16_t)((model_mm_q8 + 128u) >> 8) : 0u;
+    if (s_roll_model_mm > TOF_TP_MM_CLIP_MAX)
+    {
+        s_roll_model_mm = TOF_TP_MM_CLIP_MAX;
+    }
 
     const int32_t area_w = (TOF_TP_X1 - TOF_TP_X0) + 1;
-    const int32_t bar_y1 = TOF_TP_Y1 - 8;
-    const int32_t bar_y0 = bar_y1 - 18;
-    const int32_t outer_ry_min = 52;
-    int32_t outer_ry_max = ((bar_y0 - TOF_TP_Y0) / 2) - 10;
-    outer_ry_max = tof_clamp_i32(outer_ry_max, outer_ry_min, 112);
+    int32_t status_y0 = 0;
+    tof_tp_status_rect(NULL, &status_y0, NULL, NULL);
+    const int32_t roll_top = TOF_TP_Y0 + 6;
+    int32_t roll_bottom = status_y0 - 6;
+    if (roll_bottom < (roll_top + 24))
+    {
+        roll_bottom = roll_top + 24;
+    }
+    const int32_t roll_h = (roll_bottom - roll_top) + 1;
+    const int32_t outer_ry_min = 34;
+    int32_t outer_ry_max = (roll_h / 2) - 2;
+    outer_ry_max = tof_clamp_i32(outer_ry_max, outer_ry_min, 92);
     if (outer_ry_max < outer_ry_min)
     {
         outer_ry_max = outer_ry_min;
     }
 
+    const uint16_t fullness_geom_q10 = (uint16_t)((((fullness_q10 + 16u) / 32u) * 32u));
     const int32_t outer_ry = outer_ry_min +
-        (int32_t)(((fullness_q10 * (uint32_t)(outer_ry_max - outer_ry_min)) + 512u) / 1024u);
+        (int32_t)(((fullness_geom_q10 * (uint32_t)(outer_ry_max - outer_ry_min)) + 512u) / 1024u);
+    const int32_t depth = tof_clamp_i32(14 + (outer_ry / 3), 14, 28);
+    int32_t outer_rx_fit = ((area_w - depth) / 2) - 3;
+    outer_rx_fit = tof_clamp_i32(outer_rx_fit, 32, 120);
+    int32_t outer_rx_min = (outer_rx_fit * 58) / 100;
+    outer_rx_min = tof_clamp_i32(outer_rx_min, 26, outer_rx_fit);
+    if (outer_rx_min > outer_rx_fit)
+    {
+        outer_rx_min = outer_rx_fit;
+    }
+    const int32_t outer_rx = outer_rx_min +
+        (int32_t)(((fullness_geom_q10 * (uint32_t)(outer_rx_fit - outer_rx_min)) + 512u) / 1024u);
 
-    const bool render_live = live_data || (s_tp_mm_q8 > 0u);
+    const bool render_live = live_data || (model_mm_q8 > 0u);
     tof_ai_log_frame(mm, render_live, tick, fullness_q10);
+    const bool roll_geom_changed = ((uint16_t)outer_ry != s_tp_last_outer_ry) ||
+                                   ((uint16_t)outer_rx != s_tp_last_outer_rx);
+    const uint32_t roll_delta_q8 = tof_abs_diff_u32(model_mm_q8, s_tp_last_roll_mm_q8);
+    const bool roll_changed = s_tp_force_redraw ||
+                              (render_live != s_tp_last_live) ||
+                              (roll_geom_changed &&
+                               (roll_delta_q8 >= ((uint32_t)TOF_TP_ROLL_REDRAW_MM_DELTA << 8)));
+    const bool bar_changed = s_tp_force_redraw ||
+                             (render_live != s_tp_last_live) ||
+                             (bar_fullness_draw_q10 != s_tp_last_fullness_q10);
 
-    if (!s_tp_force_redraw &&
-        render_live == s_tp_last_live &&
-        (uint16_t)outer_ry == s_tp_last_outer_ry &&
-        (uint16_t)fullness_q10 == s_tp_last_fullness_q10)
+    if (!draw_enable)
+    {
+        s_tp_last_tick = tick;
+        /* Redraw immediately once the popup releases, but keep model cadence stable meanwhile. */
+        s_tp_force_redraw = true;
+        return;
+    }
+
+    if (!roll_changed && !bar_changed)
     {
         s_tp_last_tick = tick;
         return;
     }
 
-    const int32_t outer_rx = tof_clamp_i32((outer_ry * 76) / 100, 28, (area_w / 2) - 18);
-    const int32_t core_ry_nominal = 42;
-    const int32_t core_ry = tof_clamp_i32(core_ry_nominal, 12, outer_ry - 6);
-    const int32_t core_rx = tof_clamp_i32((core_ry * 76) / 100, 10, outer_rx - 8);
-    const int32_t hole_ry = tof_clamp_i32((core_ry * 64) / 100, 8, core_ry - 2);
-    const int32_t hole_rx = tof_clamp_i32((core_rx * 64) / 100, 8, core_rx - 2);
-    const int32_t depth = tof_clamp_i32(24 + (outer_rx / 2), 24, area_w / 3);
-    const int32_t cy = TOF_TP_Y0 + ((bar_y0 - TOF_TP_Y0) / 2);
-    int32_t back_cx = TOF_TP_X0 + (area_w / 2) - (depth / 2);
-    int32_t front_cx = back_cx + depth;
-
-    int32_t min_x = back_cx - outer_rx;
-    int32_t max_x = front_cx + outer_rx;
-    if (min_x < (TOF_TP_X0 + 2))
+    if (roll_changed)
     {
-        const int32_t shift = (TOF_TP_X0 + 2) - min_x;
-        back_cx += shift;
-        front_cx += shift;
-    }
-    min_x = back_cx - outer_rx;
-    max_x = front_cx + outer_rx;
-    if (max_x > (TOF_TP_X1 - 2))
-    {
-        const int32_t shift = max_x - (TOF_TP_X1 - 2);
-        back_cx -= shift;
-        front_cx -= shift;
-    }
+        const int32_t core_ry = tof_clamp_i32((outer_ry * 56) / 100, 12, outer_ry - 8);
+        const int32_t core_rx = tof_clamp_i32((outer_rx * 56) / 100, 12, outer_rx - 8);
+        const int32_t hole_ry = tof_clamp_i32((core_ry * 60) / 100, 7, core_ry - 3);
+        const int32_t hole_rx = tof_clamp_i32((core_rx * 60) / 100, 7, core_rx - 3);
+        const int32_t center_x = TOF_TP_X0 + (area_w / 2);
+        int32_t cy = roll_top + (roll_h / 2) - 6;
+        cy = tof_clamp_i32(cy, roll_top + outer_ry + 2, roll_bottom - outer_ry - 2);
+        const int32_t back_cx = center_x - (depth / 2);
+        const int32_t front_cx = center_x + (depth / 2);
 
-    int32_t roll_x0 = back_cx - outer_rx - 2;
-    int32_t roll_x1 = front_cx + outer_rx + (depth / 2) + 2;
-    int32_t roll_y0 = cy - outer_ry - 2;
-    int32_t roll_y1 = cy + outer_ry + 14;
+        int32_t roll_x0 = back_cx - outer_rx - 3;
+        int32_t roll_x1 = front_cx + outer_rx + 3;
+        int32_t roll_y0 = cy - outer_ry - 3;
+        int32_t roll_y1 = cy + outer_ry + 8;
 
-    if (s_tp_prev_rect_valid)
-    {
-        roll_x0 = (roll_x0 < s_tp_prev_x0) ? roll_x0 : s_tp_prev_x0;
-        roll_y0 = (roll_y0 < s_tp_prev_y0) ? roll_y0 : s_tp_prev_y0;
-        roll_x1 = (roll_x1 > s_tp_prev_x1) ? roll_x1 : s_tp_prev_x1;
-        roll_y1 = (roll_y1 > s_tp_prev_y1) ? roll_y1 : s_tp_prev_y1;
-    }
-    tof_tp_fill_bg_rect(roll_x0, roll_y0, roll_x1, roll_y1, render_live);
-
-    tof_draw_filled_ellipse(front_cx + (depth / 4),
-                            cy + outer_ry + 10,
-                            outer_rx + (depth / 2),
-                            tof_clamp_i32(outer_ry / 4, 6, 28),
-                            pack_rgb565(8u, 8u, 10u));
-    tof_draw_filled_ellipse(front_cx + (depth / 4),
-                            cy + outer_ry + 8,
-                            outer_rx + (depth / 3),
-                            tof_clamp_i32(outer_ry / 6, 4, 18),
-                            pack_rgb565(14u, 14u, 18u));
-
-    const uint16_t back_base = tof_tp_paper_color(98, render_live);
-    tof_draw_filled_ellipse(back_cx, cy, outer_rx, outer_ry, back_base);
-    tof_draw_ellipse_ring(back_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(72, render_live), back_base);
-    tof_draw_filled_ellipse(back_cx, cy, hole_rx, hole_ry, pack_rgb565(18u, 16u, 14u));
-
-    for (int32_t y = -outer_ry; y <= outer_ry; y += 3)
-    {
-        const int32_t py = cy + y;
-        int32_t py1 = py + 2;
-        if (py1 > TOF_TP_Y1)
+        if (s_tp_prev_rect_valid)
         {
-            py1 = TOF_TP_Y1;
+            roll_x0 = (roll_x0 < s_tp_prev_x0) ? roll_x0 : s_tp_prev_x0;
+            roll_y0 = (roll_y0 < s_tp_prev_y0) ? roll_y0 : s_tp_prev_y0;
+            roll_x1 = (roll_x1 > s_tp_prev_x1) ? roll_x1 : s_tp_prev_x1;
+            roll_y1 = (roll_y1 > s_tp_prev_y1) ? roll_y1 : s_tp_prev_y1;
         }
-        if (py < TOF_TP_Y0 || py1 < TOF_TP_Y0 || py > TOF_TP_Y1)
-        {
-            continue;
-        }
+        tof_tp_fill_bg_rect(roll_x0, roll_y0, roll_x1, roll_y1, render_live);
 
-        const int32_t y_abs = (y < 0) ? -y : y;
-        const int32_t xw = tof_ellipse_half_width(outer_rx, outer_ry, y_abs);
-        int32_t x0 = back_cx - xw;
-        int32_t x1 = front_cx + xw;
-        x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
-        x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
-        if (x1 < x0)
-        {
-            continue;
-        }
+        const int32_t shadow_y = tof_clamp_i32(cy + outer_ry + 2, TOF_TP_Y0, roll_bottom + 2);
+        tof_draw_filled_ellipse(center_x + (depth / 8),
+                                shadow_y,
+                                outer_rx + (depth / 5),
+                                tof_clamp_i32(outer_ry / 16, 2, 6),
+                                pack_rgb565(8u, 8u, 10u));
+        tof_draw_filled_ellipse(center_x + (depth / 10),
+                                shadow_y - 1,
+                                outer_rx + (depth / 7),
+                                tof_clamp_i32(outer_ry / 20, 2, 4),
+                                pack_rgb565(14u, 14u, 18u));
 
-        const int32_t span = x1 - x0 + 1;
-        if (span <= 0)
+        for (int32_t y = -outer_ry; y <= outer_ry; y += 2)
         {
-            continue;
-        }
-
-        const int32_t seam_1 = x0 + ((span * 22) / 100);
-        const int32_t seam_2 = x0 + ((span * 62) / 100);
-        const int32_t seam_3 = x0 + ((span * 82) / 100);
-        const int32_t tone_mid = 210 - ((y_abs * 56) / outer_ry);
-
-        const int32_t a0 = x0;
-        const int32_t a1 = tof_clamp_i32(seam_1, x0, x1);
-        const int32_t b0 = tof_clamp_i32(a1 + 1, x0, x1);
-        const int32_t b1 = tof_clamp_i32(seam_2, x0, x1);
-        const int32_t c0 = tof_clamp_i32(b1 + 1, x0, x1);
-        const int32_t c1 = tof_clamp_i32(seam_3, x0, x1);
-        const int32_t d0 = tof_clamp_i32(c1 + 1, x0, x1);
-        const int32_t d1 = x1;
-
-        if (a1 >= a0)
-        {
-            display_hal_fill_rect(a0, py, a1, py1, tof_tp_paper_color(tone_mid - 48, render_live));
-        }
-        if (b1 >= b0)
-        {
-            display_hal_fill_rect(b0, py, b1, py1, tof_tp_paper_color(tone_mid - 12, render_live));
-        }
-        if (c1 >= c0)
-        {
-            display_hal_fill_rect(c0, py, c1, py1, tof_tp_paper_color(tone_mid + 20, render_live));
-        }
-        if (d1 >= d0)
-        {
-            display_hal_fill_rect(d0, py, d1, py1, tof_tp_paper_color(tone_mid - 20, render_live));
-        }
-
-        if (((py - (cy - outer_ry)) % 8) == 0)
-        {
-            const int32_t lx0 = tof_clamp_i32(x0 + 4, x0, x1);
-            const int32_t lx1 = tof_clamp_i32(x1 - 4, x0, x1);
-            if (lx1 >= lx0)
+            const int32_t y_abs = (y < 0) ? -y : y;
+            const int32_t py = cy + y;
+            int32_t py1 = py + 1;
+            if (py1 > TOF_TP_Y1)
             {
-                display_hal_fill_rect(lx0, py, lx1, py1, tof_tp_paper_color(tone_mid - 20, render_live));
+                py1 = TOF_TP_Y1;
             }
+            if (py < TOF_TP_Y0 || py > TOF_TP_Y1)
+            {
+                continue;
+            }
+
+            const int32_t xw = tof_ellipse_half_width(outer_rx, outer_ry, y_abs);
+            int32_t x0 = back_cx - xw + 1;
+            int32_t x1 = front_cx + xw - 1;
+            x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
+            x1 = tof_clamp_i32(x1, TOF_TP_X0, TOF_TP_X1);
+            if (x1 < x0)
+            {
+                continue;
+            }
+
+            const int32_t tone = 168 + (((outer_ry - y_abs) * 44) / tof_clamp_i32(outer_ry, 1, 1024));
+            display_hal_fill_rect(x0, py, x1, py1, tof_tp_paper_color(tone, render_live));
         }
+
+        const uint16_t back_base = tof_tp_paper_color(110, render_live);
+        tof_draw_filled_ellipse(back_cx, cy, outer_rx, outer_ry, back_base);
+        tof_draw_ellipse_ring(back_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(84, render_live), back_base);
+        tof_draw_filled_ellipse(back_cx, cy, hole_rx, hole_ry, pack_rgb565(18u, 16u, 14u));
+
+        const uint16_t front_base = tof_tp_paper_color(232, render_live);
+        tof_draw_filled_ellipse(front_cx, cy, outer_rx, outer_ry, front_base);
+        tof_draw_ellipse_ring(front_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(168, render_live), front_base);
+
+        for (int32_t i = 0; i < 4; i++)
+        {
+            const int32_t ry_layer = outer_ry - 3 - (i * 5);
+            if (ry_layer <= (core_ry + 2))
+            {
+                break;
+            }
+            const int32_t rx_layer = (outer_rx * ry_layer) / outer_ry;
+            const int32_t tone = 228 - (i * 16);
+            tof_draw_ellipse_ring(front_cx,
+                                  cy,
+                                  rx_layer,
+                                  ry_layer,
+                                  1,
+                                  tof_tp_paper_color(tone, render_live),
+                                  front_base);
+        }
+
+        const uint16_t core_base = tof_tp_core_color(182, render_live);
+        tof_draw_filled_ellipse(front_cx, cy, core_rx, core_ry, core_base);
+        tof_draw_ellipse_ring(front_cx, cy, core_rx, core_ry, 2, tof_tp_core_color(118, render_live), core_base);
+        tof_draw_filled_ellipse(front_cx, cy, hole_rx, hole_ry, pack_rgb565(24u, 22u, 20u));
+        tof_draw_filled_ellipse(front_cx + 1,
+                                cy - 1,
+                                tof_clamp_i32((hole_rx * 68) / 100, 4, hole_rx),
+                                tof_clamp_i32((hole_ry * 68) / 100, 4, hole_ry),
+                                pack_rgb565(11u, 11u, 13u));
+
+        s_tp_prev_x0 = (int16_t)tof_clamp_i32(back_cx - outer_rx - 3, TOF_TP_X0, TOF_TP_X1);
+        s_tp_prev_y0 = (int16_t)tof_clamp_i32(cy - outer_ry - 3, TOF_TP_Y0, TOF_TP_Y1);
+        s_tp_prev_x1 = (int16_t)tof_clamp_i32(front_cx + outer_rx + 3, TOF_TP_X0, TOF_TP_X1);
+        s_tp_prev_y1 = (int16_t)tof_clamp_i32(cy + outer_ry + 8, TOF_TP_Y0, TOF_TP_Y1);
+        s_tp_prev_rect_valid = true;
+        s_tp_last_roll_mm_q8 = model_mm_q8;
     }
 
-    const uint16_t front_base = tof_tp_paper_color(232, render_live);
-    tof_draw_filled_ellipse(front_cx, cy, outer_rx, outer_ry, front_base);
-    tof_draw_ellipse_ring(front_cx, cy, outer_rx, outer_ry, 2, tof_tp_paper_color(164, render_live), front_base);
-
-    const int32_t paper_span = tof_clamp_i32(outer_ry - core_ry, 1, 512);
-    for (int32_t ry_layer = outer_ry - 3; ry_layer > (core_ry + 2); ry_layer -= 6)
+    if (bar_changed)
     {
-        const int32_t rx_layer = (outer_rx * ry_layer) / outer_ry;
-        const int32_t depth_px = outer_ry - ry_layer;
-        const int32_t tone = 230 - ((depth_px * 92) / paper_span);
-        tof_draw_ellipse_ring(front_cx, cy, rx_layer, ry_layer, 1, tof_tp_paper_color(tone, render_live), front_base);
+        tof_draw_fullness_bar(bar_fullness_draw_q10, model_mm_q8, render_live);
     }
-
-    const uint16_t core_base = tof_tp_core_color(184, render_live);
-    tof_draw_filled_ellipse(front_cx, cy, core_rx, core_ry, core_base);
-    tof_draw_ellipse_ring(front_cx, cy, core_rx, core_ry, 2, tof_tp_core_color(118, render_live), core_base);
-
-    const int32_t core_span = tof_clamp_i32(core_ry - hole_ry, 1, 512);
-    for (int32_t ry_layer = core_ry - 2; ry_layer > (hole_ry + 1); ry_layer -= 5)
-    {
-        const int32_t rx_layer = (core_rx * ry_layer) / core_ry;
-        const int32_t depth_px = core_ry - ry_layer;
-        const int32_t tone = 176 - ((depth_px * 86) / core_span);
-        tof_draw_ellipse_ring(front_cx, cy, rx_layer, ry_layer, 1, tof_tp_core_color(tone, render_live), core_base);
-    }
-
-    tof_draw_filled_ellipse(front_cx, cy, hole_rx, hole_ry, pack_rgb565(24u, 22u, 20u));
-    tof_draw_filled_ellipse(front_cx + 1,
-                            cy - 1,
-                            tof_clamp_i32((hole_rx * 68) / 100, 4, hole_rx),
-                            tof_clamp_i32((hole_ry * 68) / 100, 4, hole_ry),
-                            pack_rgb565(11u, 11u, 13u));
-
-    tof_draw_fullness_bar(fullness_q10, s_tp_mm_q8, render_live);
-
-    s_tp_prev_x0 = (int16_t)tof_clamp_i32(back_cx - outer_rx - 2, TOF_TP_X0, TOF_TP_X1);
-    s_tp_prev_y0 = (int16_t)tof_clamp_i32(cy - outer_ry - 2, TOF_TP_Y0, TOF_TP_Y1);
-    s_tp_prev_x1 = (int16_t)tof_clamp_i32(front_cx + outer_rx + (depth / 2) + 2, TOF_TP_X0, TOF_TP_X1);
-    s_tp_prev_y1 = (int16_t)tof_clamp_i32(cy + outer_ry + 14, TOF_TP_Y0, TOF_TP_Y1);
-    s_tp_prev_rect_valid = true;
 
     s_tp_last_tick = tick;
     s_tp_last_outer_ry = (uint16_t)outer_ry;
-    s_tp_last_fullness_q10 = (uint16_t)fullness_q10;
+    s_tp_last_outer_rx = (uint16_t)outer_rx;
+    s_tp_last_fullness_q10 = bar_fullness_draw_q10;
     s_tp_last_live = render_live;
     s_tp_force_redraw = false;
 }
@@ -1122,13 +2799,45 @@ static void tof_update_debug_panel(const uint16_t mm[64],
     }
     s_dbg_last_tick = tick;
 
+    if (s_dbg_force_redraw)
+    {
+        display_hal_fill_rect(s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y1, s_ui_dbg_bg);
+        display_hal_fill_rect(s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y0, pack_rgb565(32u, 38u, 44u));
+        memset(s_dbg_prev, 0, sizeof(s_dbg_prev));
+        s_ai_pill_prev_valid = false;
+        s_alert_pill_prev_valid = false;
+    }
+
     uint32_t valid = 0u;
     uint16_t min_mm = 0u;
     uint16_t max_mm = 0u;
     uint16_t avg_mm = 0u;
     uint16_t actual_mm = 0u;
-    tof_calc_frame_stats(mm, &valid, &min_mm, &max_mm, &avg_mm);
-    actual_mm = tof_calc_actual_distance_mm(mm);
+    uint16_t est_mm = (uint16_t)(s_tp_mm_q8 >> 8);
+    uint16_t conf_q10 = s_est_conf_q10;
+    uint16_t spread_mm = s_est_spread_mm;
+    uint32_t est_valid = s_est_valid_count;
+    uint16_t grid_noise_mm = s_ai_grid_noise_mm;
+    uint32_t full_q10 = s_roll_fullness_q10;
+    uint16_t fullness_pct = (uint16_t)((full_q10 * 100u + 512u) / 1024u);
+    const uint16_t *calc_mm = tof_calc_metric_frame(mm, live_data);
+    tof_calc_frame_stats(calc_mm, &valid, &min_mm, &max_mm, &avg_mm);
+    uint16_t curve_mm = 0u;
+    if (s_ai_runtime_on)
+    {
+        curve_mm = tof_calc_roll_curve_distance_mm(calc_mm, NULL);
+    }
+    actual_mm = (curve_mm > 0u) ? curve_mm :
+                ((valid > 0u) ? avg_mm : tof_calc_actual_distance_mm(calc_mm));
+    actual_mm = tof_apply_tp_mm_shift(actual_mm);
+
+    if (!s_ai_runtime_on)
+    {
+        conf_q10 = 0u;
+        spread_mm = 0u;
+        est_valid = 0u;
+        grid_noise_mm = 0u;
+    }
 
     char line[TOF_DBG_COLS + 1u];
     snprintf(line, sizeof(line), "LIVE:%u GL:%u GC:%u",
@@ -1137,31 +2846,38 @@ static void tof_update_debug_panel(const uint16_t mm[64],
              got_complete ? 1u : 0u);
     tof_dbg_draw_line(0u, line, s_ui_dbg_fg);
 
-    snprintf(line, sizeof(line), "RNG:%u-%u",
-             (unsigned)s_range_near_mm,
-             (unsigned)s_range_far_mm);
+    snprintf(line, sizeof(line), "TP:%u-%u",
+             (unsigned)TOF_TP_MM_FULL_NEAR,
+             (unsigned)TOF_TP_BAR_MM_EMPTY);
     tof_dbg_draw_line(1u, line, s_ui_dbg_fg);
 
-    snprintf(line, sizeof(line), "AVG:%u ACT:%u",
+    snprintf(line, sizeof(line), "AVG:%u EST:%u",
              (unsigned)avg_mm,
-             (unsigned)actual_mm);
+             (unsigned)est_mm);
     tof_dbg_draw_line(2u, line, s_ui_dbg_fg);
 
-    snprintf(line, sizeof(line), "V:%lu M:%u/%u",
-             (unsigned long)valid,
-             (unsigned)min_mm,
-             (unsigned)max_mm);
+    snprintf(line, sizeof(line), "CF:%u FQ:%u",
+             (unsigned)conf_q10,
+             (unsigned)fullness_pct);
     tof_dbg_draw_line(3u, line, s_ui_dbg_dim);
 
-    snprintf(line, sizeof(line), "ST:%lu Z:%lu",
-             (unsigned long)stale_frames,
-             (unsigned long)zero_live_frames);
+    snprintf(line, sizeof(line), "V:%lu SP:%u",
+             (unsigned long)est_valid,
+             (unsigned)spread_mm);
     tof_dbg_draw_line(4u, line, s_ui_dbg_dim);
 
-    snprintf(line, sizeof(line), "REF:%ums RAW:%u",
-             (unsigned)(TOF_RESPONSE_TARGET_US / 1000u),
-             (unsigned)TOF_DEBUG_RAW_DRAW);
+    snprintf(line, sizeof(line), "AI:%u A:%u N:%u",
+             (unsigned)(s_ai_runtime_on ? 1u : 0u),
+             (unsigned)actual_mm,
+             (unsigned)grid_noise_mm);
     tof_dbg_draw_line(5u, line, s_ui_dbg_dim);
+
+    (void)stale_frames;
+    (void)zero_live_frames;
+    (void)valid;
+    (void)min_mm;
+    (void)max_mm;
+    tof_draw_ai_pill(s_ai_runtime_on);
 
     s_dbg_force_redraw = false;
 }
@@ -1190,6 +2906,23 @@ static void tof_build_layout(void)
     s_dbg_y0 = TOF_Q1_BOT_Y0;
     s_dbg_x1 = (int16_t)(x0 + grid_w_px - 1);
     s_dbg_y1 = TOF_Q1_BOT_Y1;
+    s_ai_pill_x0 = (int16_t)(s_dbg_x0 + TOF_AI_PILL_MARGIN_X);
+    s_ai_pill_x1 = (int16_t)(s_dbg_x1 - TOF_AI_PILL_MARGIN_X);
+    s_ai_pill_y1 = (int16_t)(s_dbg_y1 - TOF_AI_PILL_MARGIN_BOTTOM);
+    s_ai_pill_y0 = (int16_t)(s_ai_pill_y1 - TOF_AI_PILL_H + 1);
+    if (s_ai_pill_y0 < (s_dbg_y0 + 1))
+    {
+        s_ai_pill_y0 = (int16_t)(s_dbg_y0 + 1);
+    }
+    s_alert_pill_x0 = s_ai_pill_x0;
+    s_alert_pill_x1 = s_ai_pill_x1;
+    s_alert_pill_y1 = (int16_t)(s_ai_pill_y0 - TOF_ALERT_PILL_GAP_Y);
+    s_alert_pill_y0 = (int16_t)(s_alert_pill_y1 - TOF_ALERT_PILL_H + 1);
+    if (s_alert_pill_y0 < (s_dbg_y0 + 1))
+    {
+        s_alert_pill_y0 = (int16_t)(s_dbg_y0 + 1);
+        s_alert_pill_y1 = (int16_t)(s_alert_pill_y0 + TOF_ALERT_PILL_H - 1);
+    }
 
     for (int32_t gy = 0; gy < TOF_GRID_H; gy++)
     {
@@ -1224,20 +2957,48 @@ static void tof_draw_outline(const tof_cell_rect_t *c, uint16_t color)
     display_hal_fill_rect(x1, y0, x1, y1, color);
 }
 
+static void tof_draw_curve_pick_overlay(bool show_overlay)
+{
+    for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+    {
+        const int32_t prev_idx = s_curve_prev_pick_idx[y];
+        const int32_t next_idx = (show_overlay) ? s_curve_pick_idx[y] : -1;
+        if (prev_idx == next_idx)
+        {
+            continue;
+        }
+
+        if (prev_idx >= 0 && prev_idx < 64)
+        {
+            const uint16_t restore = (prev_idx == s_hot_idx) ? s_ui_hot : s_ui_border;
+            tof_draw_outline(&s_cells[prev_idx], restore);
+        }
+
+        if (next_idx >= 0 && next_idx < 64)
+        {
+            tof_draw_outline(&s_cells[next_idx], s_ui_pick);
+        }
+
+        s_curve_prev_pick_idx[y] = (int16_t)next_idx;
+    }
+}
+
 static void tof_ui_init(void)
 {
     s_ui_bg = pack_rgb565(3u, 4u, 6u);
     s_ui_border = pack_rgb565(16u, 18u, 22u);
     s_ui_hot = pack_rgb565(255u, 255u, 255u);
+    s_ui_pick = pack_rgb565(56u, 242u, 255u);
     s_ui_invalid = pack_rgb565(14u, 14u, 18u);
-    s_ui_below_range = pack_rgb565(0u, 28u, 120u);
-    s_ui_above_range = pack_rgb565(56u, 20u, 0u);
+    s_ui_below_range = pack_rgb565(0u, 220u, 0u);
+    s_ui_above_range = pack_rgb565(56u, 8u, 8u);
     s_ui_dbg_bg = pack_rgb565(6u, 8u, 10u);
     s_ui_dbg_fg = pack_rgb565(210u, 220u, 230u);
     s_ui_dbg_dim = pack_rgb565(120u, 132u, 146u);
 
     tof_build_layout();
     display_hal_fill(s_ui_bg);
+    display_hal_fill_rect(TOF_TP_X0, TOF_TP_Y0, TOF_TP_X1, TOF_TP_Y1, tof_tp_bg_color(255u, true));
     display_hal_fill_rect(TOF_Q_W, 0, TOF_Q_W, TOF_LCD_H - 1, pack_rgb565(20u, 24u, 28u));
     display_hal_fill_rect(s_dbg_x0, TOF_Q1_BOT_Y0, s_dbg_x1, TOF_Q1_BOT_Y0, pack_rgb565(28u, 32u, 36u));
     display_hal_fill_rect(s_dbg_x0, s_dbg_y0, s_dbg_x1, s_dbg_y1, s_ui_dbg_bg);
@@ -1258,14 +3019,29 @@ static void tof_ui_init(void)
     memset(s_display_age, 0, sizeof(s_display_age));
     memset(s_dbg_prev, 0, sizeof(s_dbg_prev));
     s_hot_idx = -1;
+    for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+    {
+        s_curve_pick_idx[y] = -1;
+        s_curve_prev_pick_idx[y] = -1;
+    }
     s_range_near_mm = TOF_LOCKED_NEAR_MM;
     s_range_far_mm = TOF_LOCKED_FAR_MM;
     s_dbg_last_tick = 0u;
     s_dbg_force_redraw = true;
+    s_ai_pill_prev_valid = false;
+    s_ai_pill_prev_on = false;
+    s_alert_pill_prev_valid = false;
+    s_alert_pill_prev_on = true;
+    s_ai_runtime_on = (TOF_AI_DATA_LOG_ENABLE != 0u);
+    s_alert_runtime_on = true;
     s_tp_last_tick = 0u;
     s_tp_last_outer_ry = 0u;
+    s_tp_last_outer_rx = 0u;
     s_tp_last_fullness_q10 = 0u;
+    s_tp_last_roll_mm_q8 = 0u;
     s_tp_mm_q8 = 0u;
+    s_tp_live_actual_mm = 0u;
+    s_tp_live_closest_mm = 0u;
     s_tp_last_live = false;
     s_tp_prev_rect_valid = false;
     s_tp_prev_x0 = 0;
@@ -1273,7 +3049,278 @@ static void tof_ui_init(void)
     s_tp_prev_x1 = 0;
     s_tp_prev_y1 = 0;
     s_ai_log_last_tick = 0u;
+    s_est_near_mm = TOF_TP_MM_FULL_NEAR;
+    s_est_far_mm = TOF_TP_MM_EMPTY_FAR;
+    s_est_mm_q8 = 0u;
+    s_est_conf_q10 = 0u;
+    s_est_fullness_q10 = 640u;
+    s_est_valid_count = 0u;
+    s_est_spread_mm = 0u;
+    s_roll_fullness_q10 = 640u;
+    s_roll_model_mm = 0u;
+    s_roll_alert_prev_level = kTofRollAlertFull;
+    s_roll_alert_prev_valid = false;
+    s_roll_status_prev_level = kTofRollAlertFull;
+    s_roll_status_prev_valid = false;
+    s_roll_status_prev_live = false;
+    s_alert_popup_active = false;
+    s_alert_popup_prev_drawn = false;
+    s_alert_popup_rearm_on_full = true;
+    s_alert_popup_hold_empty = false;
+    s_alert_low_popup_shown = false;
+    s_roll_full_rearm_streak = 0u;
+    s_alert_popup_level = kTofRollAlertLow;
+    s_alert_popup_prev_level = kTofRollAlertLow;
+    s_alert_popup_until_tick = 0u;
+    s_alert_popup_last_live = false;
+    s_alert_popup_prev_x0 = 0;
+    s_alert_popup_prev_y0 = 0;
+    s_alert_popup_prev_x1 = 0;
+    s_alert_popup_prev_y1 = 0;
+    s_touch_was_down = false;
+    s_touch_last_poll_tick = 0u;
     s_tp_force_redraw = true;
+    tof_ai_grid_reset();
+}
+
+static void tof_ai_grid_reset(void)
+{
+    memset(s_ai_grid_mm, 0, sizeof(s_ai_grid_mm));
+    memset(s_ai_grid_hold_age, 0, sizeof(s_ai_grid_hold_age));
+    s_ai_grid_noise_mm = 0u;
+}
+
+static uint16_t tof_ai_grid_median_u16(uint16_t values[9], uint32_t count)
+{
+    if (count == 0u)
+    {
+        return 0u;
+    }
+
+    for (uint32_t i = 1u; i < count; i++)
+    {
+        const uint16_t key = values[i];
+        int32_t j = (int32_t)i - 1;
+        while ((j >= 0) && (values[(uint32_t)j] > key))
+        {
+            values[(uint32_t)j + 1u] = values[(uint32_t)j];
+            j--;
+        }
+        values[(uint32_t)j + 1u] = key;
+    }
+
+    return values[count / 2u];
+}
+
+static uint16_t tof_ai_grid_outlier_threshold_mm(uint16_t spread_mm)
+{
+    uint32_t threshold = TOF_AI_GRID_OUTLIER_MM_MIN + (spread_mm / 12u);
+    if (threshold < TOF_AI_GRID_OUTLIER_MM_MIN)
+    {
+        threshold = TOF_AI_GRID_OUTLIER_MM_MIN;
+    }
+    if (threshold > TOF_AI_GRID_OUTLIER_MM_MAX)
+    {
+        threshold = TOF_AI_GRID_OUTLIER_MM_MAX;
+    }
+    return (uint16_t)threshold;
+}
+
+static void tof_ai_denoise_heatmap_frame(const uint16_t in_mm[64], uint16_t out_mm[64], bool live_data)
+{
+#if TOF_AI_GRID_ENABLE
+    if (!live_data)
+    {
+        for (uint32_t i = 0u; i < 64u; i++)
+        {
+            const uint16_t raw = in_mm[i];
+            uint16_t next = s_ai_grid_mm[i];
+
+            if (tof_mm_valid(raw))
+            {
+                next = raw;
+                s_ai_grid_hold_age[i] = 0u;
+            }
+            else if (tof_mm_valid(next))
+            {
+                next = (uint16_t)(((uint32_t)next * 31u) / 32u);
+                if (next < 8u)
+                {
+                    next = 0u;
+                }
+            }
+
+            s_ai_grid_mm[i] = next;
+            out_mm[i] = next;
+        }
+
+        s_ai_grid_noise_mm = 0u;
+        return;
+    }
+
+    uint32_t valid_count = 0u;
+    uint16_t min_mm = 0xFFFFu;
+    uint16_t max_mm = 0u;
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        const uint16_t v = in_mm[i];
+        if (!tof_mm_valid(v))
+        {
+            continue;
+        }
+
+        valid_count++;
+        if (v < min_mm)
+        {
+            min_mm = v;
+        }
+        if (v > max_mm)
+        {
+            max_mm = v;
+        }
+    }
+
+    const uint16_t spread_mm = (valid_count > 0u) ? (uint16_t)(max_mm - min_mm) : 0u;
+    const uint16_t outlier_threshold_mm = tof_ai_grid_outlier_threshold_mm(spread_mm);
+    const uint16_t conf_q10 = tof_estimator_confidence_q10(valid_count, spread_mm, live_data);
+
+    uint16_t candidate[64];
+    uint32_t noise_sum = 0u;
+    uint32_t noise_count = 0u;
+
+    for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+    {
+        for (uint32_t x = 0u; x < TOF_GRID_W; x++)
+        {
+            const uint32_t idx = (y * TOF_GRID_W) + x;
+            const uint16_t raw = in_mm[idx];
+
+            uint16_t neighbors[9];
+            uint32_t ncount = 0u;
+            for (int32_t dy = -1; dy <= 1; dy++)
+            {
+                for (int32_t dx = -1; dx <= 1; dx++)
+                {
+                    const int32_t nx = (int32_t)x + dx;
+                    const int32_t ny = (int32_t)y + dy;
+                    if (nx < 0 || nx >= TOF_GRID_W || ny < 0 || ny >= TOF_GRID_H)
+                    {
+                        continue;
+                    }
+
+                    const uint16_t nv = in_mm[(uint32_t)ny * TOF_GRID_W + (uint32_t)nx];
+                    if (tof_mm_valid(nv))
+                    {
+                        neighbors[ncount++] = nv;
+                    }
+                }
+            }
+
+            uint16_t pred = 0u;
+            bool have_pred = false;
+            if (ncount >= TOF_AI_GRID_NEIGHBOR_MIN)
+            {
+                pred = tof_ai_grid_median_u16(neighbors, ncount);
+                have_pred = true;
+            }
+            else if (tof_mm_valid(s_ai_grid_mm[idx]))
+            {
+                pred = s_ai_grid_mm[idx];
+                have_pred = true;
+            }
+
+            if (tof_mm_valid(raw))
+            {
+                uint16_t fused = raw;
+                if (have_pred)
+                {
+                    const uint16_t delta = tof_abs_diff_u16(raw, pred);
+                    noise_sum += delta;
+                    noise_count++;
+                    if (delta > outlier_threshold_mm)
+                    {
+                        fused = (uint16_t)((((uint32_t)pred * 3u) + raw + 2u) / 4u);
+                    }
+                    else if (delta > (outlier_threshold_mm / 2u))
+                    {
+                        fused = (uint16_t)(((uint32_t)pred + raw + 1u) / 2u);
+                    }
+                }
+                candidate[idx] = fused;
+            }
+            else if (have_pred)
+            {
+                candidate[idx] = pred;
+            }
+            else
+            {
+                candidate[idx] = 0u;
+            }
+        }
+    }
+
+    uint32_t slow_den = 6u;
+    if (conf_q10 >= 768u)
+    {
+        slow_den = 3u;
+    }
+    else if (conf_q10 >= 512u)
+    {
+        slow_den = 4u;
+    }
+    else if (conf_q10 >= 256u)
+    {
+        slow_den = 5u;
+    }
+
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        const uint16_t prev = s_ai_grid_mm[i];
+        const uint16_t cur = candidate[i];
+        uint16_t next = 0u;
+
+        if (tof_mm_valid(cur))
+        {
+            if (tof_mm_valid(prev))
+            {
+                const uint16_t delta = tof_abs_diff_u16(prev, cur);
+                const uint32_t den = (delta >= TOF_AI_GRID_FAST_DELTA_MM) ? 2u : slow_den;
+                next = (uint16_t)(((uint32_t)prev * (den - 1u) + cur + (den / 2u)) / den);
+            }
+            else
+            {
+                next = cur;
+            }
+            s_ai_grid_hold_age[i] = 0u;
+        }
+        else if (tof_mm_valid(prev) && (s_ai_grid_hold_age[i] < TOF_AI_GRID_HOLD_FRAMES))
+        {
+            s_ai_grid_hold_age[i]++;
+            next = prev;
+        }
+        else if (tof_mm_valid(prev))
+        {
+            next = (uint16_t)(((uint32_t)prev * 31u) / 32u);
+            if (next < 8u)
+            {
+                next = 0u;
+            }
+        }
+        else
+        {
+            next = 0u;
+        }
+
+        s_ai_grid_mm[i] = next;
+        out_mm[i] = next;
+    }
+
+    s_ai_grid_noise_mm = (noise_count > 0u) ? (uint16_t)(noise_sum / noise_count) : 0u;
+#else
+    memcpy(out_mm, in_mm, sizeof(uint16_t) * 64u);
+    (void)live_data;
+    s_ai_grid_noise_mm = 0u;
+#endif
 }
 
 #if !TOF_DEBUG_RAW_DRAW
@@ -1880,7 +3927,31 @@ static void tof_draw_heatmap_incremental(const uint16_t mm[64], bool live_data)
     tof_filter_frame(mm, live_data);
     tof_spatial_postprocess(s_filtered_mm, live_data);
     tof_compose_display_frame(live_data);
+    if (s_ai_runtime_on)
+    {
+        uint16_t denoised[64];
+        uint16_t repaired[64];
+        tof_ai_denoise_heatmap_frame(s_display_mm, denoised, live_data);
+        tof_fill_display_holes(denoised, repaired);
+        memcpy(s_display_mm, repaired, sizeof(repaired));
+    }
+    else
+    {
+        s_ai_grid_noise_mm = 0u;
+    }
+    tof_repair_corner_blindspots(s_display_mm);
     tof_update_range(s_display_mm, live_data);
+    if (s_ai_runtime_on && live_data)
+    {
+        (void)tof_calc_roll_curve_distance_mm(s_display_mm, s_curve_pick_idx);
+    }
+    else
+    {
+        for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+        {
+            s_curve_pick_idx[y] = -1;
+        }
+    }
 
     for (uint32_t idx = 0; idx < 64u; idx++)
     {
@@ -1895,7 +3966,13 @@ static void tof_draw_heatmap_incremental(const uint16_t mm[64], bool live_data)
         }
     }
 
+    const uint32_t corner_idx = (TOF_GRID_H - 1u) * TOF_GRID_W;
+    const tof_cell_rect_t *corner = &s_cells[corner_idx];
+    const uint16_t corner_color = tof_color_from_mm(s_display_mm[corner_idx], s_range_near_mm, s_range_far_mm);
+    display_hal_fill_rect(corner->ix0, corner->iy1, corner->ix0, corner->iy1, corner_color);
+
     tof_update_hotspot(s_display_mm, live_data);
+    tof_draw_curve_pick_overlay(s_ai_runtime_on && live_data);
 }
 #endif
 
@@ -1903,8 +3980,31 @@ static void tof_draw_heatmap_incremental(const uint16_t mm[64], bool live_data)
 static void tof_draw_heatmap_raw(const uint16_t mm[64], bool live_data)
 {
     uint16_t draw_mm[64];
-    tof_fill_display_holes(mm, draw_mm);
+    if (s_ai_runtime_on)
+    {
+        uint16_t repaired[64];
+        tof_ai_denoise_heatmap_frame(mm, draw_mm, live_data);
+        tof_fill_display_holes(draw_mm, repaired);
+        memcpy(draw_mm, repaired, sizeof(repaired));
+    }
+    else
+    {
+        tof_fill_display_holes(mm, draw_mm);
+        s_ai_grid_noise_mm = 0u;
+    }
+    tof_repair_corner_blindspots(draw_mm);
     tof_update_range(draw_mm, live_data);
+    if (s_ai_runtime_on && live_data)
+    {
+        (void)tof_calc_roll_curve_distance_mm(draw_mm, s_curve_pick_idx);
+    }
+    else
+    {
+        for (uint32_t y = 0u; y < TOF_GRID_H; y++)
+        {
+            s_curve_pick_idx[y] = -1;
+        }
+    }
 
     for (uint32_t idx = 0; idx < 64u; idx++)
     {
@@ -1919,7 +4019,13 @@ static void tof_draw_heatmap_raw(const uint16_t mm[64], bool live_data)
         }
     }
 
+    const uint32_t corner_idx = (TOF_GRID_H - 1u) * TOF_GRID_W;
+    const tof_cell_rect_t *corner = &s_cells[corner_idx];
+    const uint16_t corner_color = tof_color_from_mm(draw_mm[corner_idx], s_range_near_mm, s_range_far_mm);
+    display_hal_fill_rect(corner->ix0, corner->iy1, corner->ix0, corner->iy1, corner_color);
+
     tof_update_hotspot(draw_mm, live_data);
+    tof_draw_curve_pick_overlay(s_ai_runtime_on && live_data);
 }
 #endif
 
@@ -1949,6 +4055,7 @@ int main(void)
 #endif
 
     tof_ui_init();
+    tof_touch_init();
     memset(s_synth_subcap_frame, 0, sizeof(s_synth_subcap_frame));
     s_synth_subcap_capture = 0u;
 
@@ -1965,6 +4072,15 @@ int main(void)
     uint32_t TOF_UNUSED synth_complete_count = 0u;
     uint32_t last_draw_tick = 0u;
     bool have_drawn_frame = false;
+
+    uint16_t boot_roll_mm[64];
+    for (uint32_t i = 0u; i < 64u; i++)
+    {
+        boot_roll_mm[i] = TOF_TP_MM_FULL_NEAR;
+    }
+    s_tp_force_redraw = true;
+    tof_update_spool_model(boot_roll_mm, false, tick, true);
+    s_tp_force_redraw = true;
 
     for (;;)
     {
@@ -2188,7 +4304,9 @@ int main(void)
 #endif
         }
 
-        if (draw_now)
+        const bool popup_visible = s_alert_runtime_on && s_alert_popup_active;
+
+        if (draw_now && !popup_visible)
         {
 #if TOF_DEBUG_RAW_DRAW
             const bool raw_live = (tof_ok && got_live);
@@ -2200,15 +4318,20 @@ int main(void)
             have_drawn_frame = true;
         }
 
-        tof_update_spool_model(frame_mm, (tof_ok && have_live), tick);
-
-        tof_update_debug_panel(frame_mm,
-                               (tof_ok && have_live),
-                               got_live,
-                               got_complete,
-                               stale_frames,
-                               zero_live_frames,
-                               tick);
+        tof_touch_poll_ai_toggle(tick);
+        const bool model_live = (tof_ok && have_live);
+        tof_update_spool_model(frame_mm, model_live, tick, !popup_visible);
+        if (!popup_visible)
+        {
+            tof_update_debug_panel(frame_mm,
+                                   model_live,
+                                   got_live,
+                                   got_complete,
+                                   stale_frames,
+                                   zero_live_frames,
+                                   tick);
+        }
+        tof_update_roll_alert_ui(s_roll_fullness_q10, model_live, tick);
 
         tick++;
         SDK_DelayAtLeastUs(TOF_FRAME_US, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);

@@ -3,7 +3,7 @@
 ## Scope
 - Project: `ToF__demo_NXP_FRDM-MCXN947`
 - Baseline: TP roll + bargraph UI is locked and restorable via golden/failsafe tags.
-- New goal: start AI-based roll estimation pipeline and transition rendering to model output.
+- New goal: prioritize low-latency deterministic TP estimation with lightweight self-calibration, while keeping AI logging available.
 
 ## Backlog Reset
 - Prior low-level decode/mapping tasks are complete and archived in:
@@ -48,6 +48,23 @@
 - [ ] Validate latency target:
   - TP/bar update at `~100 ms`
   - no visible wipe/flicker during hold.
+
+## Adaptive Filter + Self-Training Workstream (Primary)
+
+### P0: Estimator Bring-Up
+- [x] Add robust TP estimator using 8x8 trimmed-mean signal (invalid rejection + center weighting).
+- [x] Add confidence score from valid-count and spread.
+- [x] Add adaptive temporal smoothing (fast response on real changes, slower on steady signal).
+- [x] Add bounded self-calibration of near/far TP references during high-confidence stable windows.
+
+### P1: Runtime UX
+- [x] Add tiny terminal AI/estimator fields (`AI`, estimated mm, confidence, fullness, adaptive range).
+- [x] Add touch-toggle `AI ON/OFF` pill below terminal in Q1 debug region.
+- [ ] Tune estimator thresholds to reduce jitter at close-range hand occlusion.
+
+### P2: Validation
+- [ ] Validate `50..150 mm` operating behavior for persistent TP roll + bargraph updates.
+- [ ] Record acceptance trace for steady hold and fast hand motion.
 
 ## Definition Of Done (AI Milestone)
 - [ ] AI estimation stable enough to replace direct distance mapping for TP/bar UI.
