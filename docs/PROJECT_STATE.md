@@ -6,8 +6,8 @@ Project: `EdgeAI_3D_Printer_Spool_Size_ToF_demo_NXP_FRDM-MCXN947`
 ## Current Baseline
 - Release baseline: v1 recovered spool baseline
 - Golden tag: `GOLDEN_2026-02-14_v1_spool_recovered_baseline`
-- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_<commit>`
-- Golden commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_27eb7fa`
+- Golden commit: `27eb7fae1a5915252ecda34f4ab6a7652aca32cb`
 - Failsafe image: `failsafe/FAILSAFE_2026-02-14_v1_spool_recovered_baseline.elf`
 - Lifecycle: active baseline checkpoint
 

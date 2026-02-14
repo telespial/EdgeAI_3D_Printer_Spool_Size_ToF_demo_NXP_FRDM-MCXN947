@@ -12,7 +12,7 @@ Read in order:
 
 Current baseline:
 - Golden tag: `GOLDEN_2026-02-14_v1_spool_recovered_baseline`
-- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_27eb7fa`
 - Failsafe: `failsafe/FAILSAFE_2026-02-14_v1_spool_recovered_baseline.elf`
 
 Primary objective:

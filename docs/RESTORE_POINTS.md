@@ -22,8 +22,8 @@ BUILD_DIR=mcuxsdk_ws/build_spool ./tools/flash_frdmmcxn947.sh
 
 ### 2026-02-14 Golden (Recovered Spool Baseline)
 - Tag: `GOLDEN_2026-02-14_v1_spool_recovered_baseline`
-- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_<commit>`
-- Commit: `<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_27eb7fa`
+- Commit: `27eb7fae1a5915252ecda34f4ab6a7652aca32cb`
 - Status: `CURRENT BASELINE`
 - Hardware: FRDM-MCXN947 + LCD-PAR-S035 + TMF8828_EVM_EB_SHIELD
 - Behavior:

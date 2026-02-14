@@ -31,7 +31,7 @@
 ## Restore Baseline
 - Golden restore index: `docs/RESTORE_POINTS.md`
 - Golden tag: `GOLDEN_2026-02-14_v1_spool_recovered_baseline`
-- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_<commit>`
+- Lock tag: `GOLDEN_LOCK_2026-02-14_v1_27eb7fa`
 - Failsafe pointer: `docs/failsafe.md`
 - Failsafe flash command: `./tools/flash_failsafe.sh "$(sed -n '1p' docs/failsafe.md)"`
 
