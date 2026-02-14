@@ -110,6 +110,7 @@
 #define TOF_ROLL_MEDIUM_TRIGGER_MM TOF_TP_MM_FULL_NEAR
 #define TOF_ROLL_LOW_TRIGGER_MM 50u
 #define TOF_ROLL_EMPTY_TRIGGER_MM 60u
+#define TOF_EMPTY_RANGE_EXTEND_MM 20u
 #define TOF_ROLL_MEDIUM_MIN_Q10 358u  /* 35% */
 #define TOF_ROLL_FULL_MIN_Q10 768u    /* 75% */
 #define TOF_ROLL_SEGMENT_COUNT 8u
@@ -124,6 +125,8 @@
 #define TOF_ROLL_FULL_CAPTURE_MM (TOF_TP_MM_FULL_NEAR + 8u)
 #define TOF_ROLL_FULL_REARM_STREAK 2u
 #define TOF_TP_BAR_MM_EMPTY TOF_ROLL_EMPTY_TRIGGER_MM
+#define TOF_TP_BAR_MM_EMPTY_SCALED (TOF_TP_BAR_MM_EMPTY + TOF_EMPTY_RANGE_EXTEND_MM)
+#define TOF_ROLL_EMPTY_TRIGGER_MM_SCALED (TOF_ROLL_EMPTY_TRIGGER_MM + TOF_EMPTY_RANGE_EXTEND_MM)
 #define TOF_TP_ROLL_REDRAW_MM_DELTA 2u
 #define TOF_ROLL_FULL_SPARSE_VALID_MAX 36u
 #define TOF_ROLL_FULL_SPARSE_AVG_MAX 90u
@@ -134,6 +137,8 @@
 #define TOF_ROLL_EMPTY_SPARSE_AVG_MIN 70u
 #define TOF_ROLL_EMPTY_ENTER_MM 62u
 #define TOF_ROLL_EMPTY_EXIT_MM 58u
+#define TOF_ROLL_EMPTY_ENTER_MM_SCALED (TOF_ROLL_EMPTY_ENTER_MM + TOF_EMPTY_RANGE_EXTEND_MM)
+#define TOF_ROLL_EMPTY_EXIT_MM_SCALED (TOF_ROLL_EMPTY_EXIT_MM + TOF_EMPTY_RANGE_EXTEND_MM)
 #define TOF_TP_CURVE_ROWS_PICK 4u
 #define TOF_TP_CURVE_EDGE_GUARD_COLS 1u
 #define TOF_TP_CURVE_MIN_ROWS 4u
@@ -280,7 +285,7 @@ static bool s_touch_was_down = false;
 static uint32_t s_touch_last_poll_tick = 0u;
 static bool s_ai_runtime_on = (TOF_AI_DATA_LOG_ENABLE != 0u);
 static uint16_t s_est_near_mm = TOF_TP_MM_FULL_NEAR;
-static uint16_t s_est_far_mm = TOF_TP_MM_EMPTY_FAR;
+static uint16_t s_est_far_mm = TOF_TP_BAR_MM_EMPTY_SCALED;
 static uint32_t s_est_mm_q8 = 0u;
 static uint16_t s_est_conf_q10 = 0u;
 static uint16_t s_est_fullness_q10 = 640u;
@@ -835,14 +840,14 @@ static tof_roll_alert_level_t tof_roll_alert_level_from_mm_segments(uint16_t mm,
 
     if (prev_valid && prev == kTofRollAlertEmpty)
     {
-        if ((mm > TOF_ROLL_EMPTY_EXIT_MM) || (segments == 0u))
+        if ((mm > TOF_ROLL_EMPTY_EXIT_MM_SCALED) || (segments == 0u))
         {
             return kTofRollAlertEmpty;
         }
     }
     else
     {
-        if ((mm >= TOF_ROLL_EMPTY_ENTER_MM) && (segments <= 1u))
+        if ((mm >= TOF_ROLL_EMPTY_ENTER_MM_SCALED) && (segments <= 1u))
         {
             return kTofRollAlertEmpty;
         }
@@ -1546,7 +1551,7 @@ static void tof_update_roll_alert_ui(uint32_t fullness_q10, bool live_data, uint
 
     if (s_alert_popup_active)
     {
-        /* Keep popup topmost even while spool redraws underneath. */
+        /* Keep popup topmost even while TP roll redraws underneath. */
         tof_draw_roll_status_popup(live_data, s_alert_popup_level);
     }
     else if (s_alert_popup_prev_drawn)
@@ -2531,9 +2536,10 @@ static void tof_tp_fill_bg_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
 static uint16_t tof_tp_paper_color(int32_t tone, bool live_data)
 {
     tone = tof_clamp_i32(tone, 0, 255);
-    int32_t r = 176 + ((tone * 70) / 255);
-    int32_t g = 170 + ((tone * 68) / 255);
-    int32_t b = 156 + ((tone * 62) / 255);
+    /* Filament red gradient for spool windings. */
+    int32_t r = 168 + ((tone * 82) / 255);
+    int32_t g = 20 + ((tone * 38) / 255);
+    int32_t b = 20 + ((tone * 34) / 255);
     if (!live_data)
     {
         r = (r * 3) / 4;
@@ -2543,12 +2549,24 @@ static uint16_t tof_tp_paper_color(int32_t tone, bool live_data)
     return pack_rgb565((uint32_t)r, (uint32_t)g, (uint32_t)b);
 }
 
+static uint16_t tof_tp_filament_gap_color(int32_t tone, bool live_data)
+{
+    tone = tof_clamp_i32(tone, 0, 255);
+    int32_t gray = 86 + ((tone * 56) / 255);
+    if (!live_data)
+    {
+        gray = (gray * 3) / 4;
+    }
+    return pack_rgb565((uint32_t)gray, (uint32_t)gray, (uint32_t)gray);
+}
+
 static uint16_t tof_tp_core_color(int32_t tone, bool live_data)
 {
     tone = tof_clamp_i32(tone, 0, 255);
-    int32_t r = 90 + ((tone * 82) / 255);
-    int32_t g = 70 + ((tone * 64) / 255);
-    int32_t b = 46 + ((tone * 44) / 255);
+    /* Dark graphite spool body / side flanges. */
+    int32_t r = 18 + ((tone * 40) / 255);
+    int32_t g = 20 + ((tone * 42) / 255);
+    int32_t b = 24 + ((tone * 46) / 255);
     if (!live_data)
     {
         r = (r * 3) / 4;
@@ -2578,6 +2596,51 @@ static void tof_draw_ellipse_ring(int32_t cx,
     {
         tof_draw_filled_ellipse(cx, cy, inner_rx, inner_ry, fill_color);
     }
+}
+
+static void tof_draw_spoked_flange_face(int32_t cx,
+                                        int32_t cy,
+                                        int32_t flange_rx,
+                                        int32_t flange_ry,
+                                        int32_t hub_outer_rx,
+                                        int32_t hub_outer_ry,
+                                        int32_t bore_rx,
+                                        int32_t bore_ry,
+                                        int32_t filament_rx,
+                                        int32_t filament_ry,
+                                        uint16_t flange_color,
+                                        uint16_t spoke_color,
+                                        uint16_t opening_color,
+                                        uint16_t bore_color,
+                                        uint8_t fill_steps)
+{
+    (void)filament_rx;
+    (void)filament_ry;
+
+    if (flange_rx <= 6 || flange_ry <= 6 || hub_outer_rx <= 4 || hub_outer_ry <= 4 || bore_rx <= 2 || bore_ry <= 2)
+    {
+        return;
+    }
+
+    tof_draw_filled_ellipse(cx, cy, flange_rx, flange_ry, flange_color);
+    tof_draw_ellipse_ring(cx, cy, flange_rx, flange_ry, 2, spoke_color, flange_color);
+
+    if (fill_steps > TOF_ROLL_SEGMENT_COUNT)
+    {
+        fill_steps = TOF_ROLL_SEGMENT_COUNT;
+    }
+    if (fill_steps > 0u)
+    {
+        const int32_t outer_max_rx = tof_clamp_i32(filament_rx, bore_rx + 1, flange_rx - 1);
+        const int32_t outer_max_ry = tof_clamp_i32(filament_ry, bore_ry + 1, flange_ry - 1);
+        const int32_t span_rx = outer_max_rx - bore_rx;
+        const int32_t span_ry = outer_max_ry - bore_ry;
+        const int32_t red_outer_rx = bore_rx + (((int32_t)fill_steps * span_rx) / (int32_t)TOF_ROLL_SEGMENT_COUNT);
+        const int32_t red_outer_ry = bore_ry + (((int32_t)fill_steps * span_ry) / (int32_t)TOF_ROLL_SEGMENT_COUNT);
+        tof_draw_filled_ellipse(cx, cy, red_outer_rx, red_outer_ry, opening_color);
+    }
+
+    tof_draw_filled_ellipse(cx, cy, bore_rx, bore_ry, bore_color);
 }
 
 static uint16_t tof_tp_bar_color(uint32_t fullness_q10, bool live_data)
@@ -2877,8 +2940,8 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     const bool hard_empty_candidate =
         no_surface_signal ||
         (sparse_or_missing && (avg_mm >= TOF_ROLL_EMPTY_SPARSE_AVG_MIN)) ||
-        ((closest_mm > TOF_ROLL_EMPTY_TRIGGER_MM) &&
-         ((curve_mm == 0u) || (curve_mm > TOF_ROLL_EMPTY_TRIGGER_MM)));
+        ((closest_mm > TOF_ROLL_EMPTY_TRIGGER_MM_SCALED) &&
+         ((curve_mm == 0u) || (curve_mm > TOF_ROLL_EMPTY_TRIGGER_MM_SCALED)));
 
     const bool full_capture_candidate =
         (closest_mm > 0u) && (closest_mm <= TOF_ROLL_FULL_CAPTURE_MM);
@@ -2960,7 +3023,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         snap_extreme = full_sparse_candidate ||
                        hard_empty_candidate ||
                        (snap_mm <= TOF_ROLL_FULL_CAPTURE_MM) ||
-                       (snap_mm > TOF_ROLL_EMPTY_TRIGGER_MM);
+                       (snap_mm > TOF_ROLL_EMPTY_TRIGGER_MM_SCALED);
         if (s_tp_mm_q8 == 0u || snap_extreme)
         {
             s_tp_mm_q8 = ((uint32_t)snap_mm << 8);
@@ -2987,7 +3050,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
 #endif
     uint32_t fullness_q10 = tof_tp_fullness_q10_from_mm_q8_bounds(model_mm_q8,
                                                                    TOF_TP_MM_FULL_NEAR,
-                                                                   TOF_TP_BAR_MM_EMPTY);
+                                                                   TOF_TP_BAR_MM_EMPTY_SCALED);
     if (full_sparse_candidate)
     {
         fullness_q10 = 1024u;
@@ -3046,38 +3109,43 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         roll_bottom = roll_top + 24;
     }
     const int32_t roll_h = (roll_bottom - roll_top) + 1;
-    const int32_t outer_ry_min = 34;
-    int32_t outer_ry_max = (roll_h / 2) - 2;
-    outer_ry_max = tof_clamp_i32(outer_ry_max, outer_ry_min, 92);
-    if (outer_ry_max < outer_ry_min)
+    const int32_t flange_ry_min = 34;
+    int32_t flange_ry = (roll_h / 2) - 2;
+    flange_ry = tof_clamp_i32(flange_ry, flange_ry_min, 92);
+    if (flange_ry < flange_ry_min)
     {
-        outer_ry_max = outer_ry_min;
+        flange_ry = flange_ry_min;
     }
 
     const uint8_t roll_segments = bar_segments;
-    const int32_t depth = tof_clamp_i32(14 + (outer_ry_max / 3), 14, 28);
-    int32_t outer_rx_fit = ((area_w - depth) / 2) - 3;
-    outer_rx_fit = tof_clamp_i32(outer_rx_fit, 32, 120);
-    const int32_t core_ry_fixed = tof_clamp_i32((outer_ry_max * 56) / 100, 18, outer_ry_max - 6);
-    const int32_t core_rx_fixed = tof_clamp_i32((outer_rx_fit * 56) / 100, 18, outer_rx_fit - 6);
-    const int32_t white_max_ry = tof_clamp_i32(outer_ry_max - core_ry_fixed, 0, outer_ry_max);
-    const int32_t white_max_rx = tof_clamp_i32(outer_rx_fit - core_rx_fixed, 0, outer_rx_fit);
-    const int32_t white_add_ry =
-        (int32_t)(((uint32_t)roll_segments * (uint32_t)white_max_ry + 4u) / TOF_ROLL_SEGMENT_COUNT);
-    const int32_t white_add_rx =
-        (int32_t)(((uint32_t)roll_segments * (uint32_t)white_max_rx + 4u) / TOF_ROLL_SEGMENT_COUNT);
-    const int32_t outer_ry = core_ry_fixed + white_add_ry;
-    const int32_t outer_rx = core_rx_fixed + white_add_rx;
+    const int32_t depth = tof_clamp_i32(14 + (flange_ry / 3), 14, 28);
+    int32_t flange_rx = ((area_w - depth) / 2) - 3;
+    flange_rx = tof_clamp_i32(flange_rx, 32, 120);
+
+    const int32_t hub_outer_ry = tof_clamp_i32((flange_ry * 56) / 100, 18, flange_ry - 6);
+    const int32_t hub_outer_rx = tof_clamp_i32((flange_rx * 56) / 100, 18, flange_rx - 6);
+    const int32_t bore_rx = tof_clamp_i32(28, 6, hub_outer_rx - 4);
+    const int32_t bore_ry = tof_clamp_i32(28, 6, hub_outer_ry - 4);
+
+    const int32_t filament_max_add_ry = tof_clamp_i32(flange_ry - hub_outer_ry - 2, 0, flange_ry);
+    const int32_t filament_max_add_rx = tof_clamp_i32(flange_rx - hub_outer_rx - 2, 0, flange_rx);
+    const int32_t filament_add_ry =
+        (int32_t)(((uint32_t)roll_segments * (uint32_t)filament_max_add_ry + 4u) / TOF_ROLL_SEGMENT_COUNT);
+    const int32_t filament_add_rx =
+        (int32_t)(((uint32_t)roll_segments * (uint32_t)filament_max_add_rx + 4u) / TOF_ROLL_SEGMENT_COUNT);
+    const int32_t filament_ry = hub_outer_ry + filament_add_ry;
+    const int32_t filament_rx = hub_outer_rx + filament_add_rx;
 
     const bool render_live = live_data || (model_mm_q8 > 0u);
     tof_ai_log_frame(mm, render_live, tick, fullness_q10);
-    const bool roll_geom_changed = ((uint16_t)outer_ry != s_tp_last_outer_ry) ||
-                                   ((uint16_t)outer_rx != s_tp_last_outer_rx);
+    const bool roll_geom_changed = ((uint16_t)filament_ry != s_tp_last_outer_ry) ||
+                                   ((uint16_t)filament_rx != s_tp_last_outer_rx);
     const uint32_t roll_delta_q8 = tof_abs_diff_u32(model_mm_q8, s_tp_last_roll_mm_q8);
     const bool roll_changed = s_tp_force_redraw ||
                               (render_live != s_tp_last_live) ||
-                              (roll_geom_changed &&
-                               (roll_delta_q8 >= ((uint32_t)TOF_TP_ROLL_REDRAW_MM_DELTA << 8)));
+                              roll_geom_changed ||
+                              (bar_fullness_draw_q10 != s_tp_last_fullness_q10) ||
+                              (roll_delta_q8 >= ((uint32_t)TOF_TP_ROLL_REDRAW_MM_DELTA << 8));
     const bool bar_changed = s_tp_force_redraw ||
                              (render_live != s_tp_last_live) ||
                              (bar_fullness_draw_q10 != s_tp_last_fullness_q10);
@@ -3098,21 +3166,17 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
 
     if (roll_changed)
     {
-        const bool has_paper = (roll_segments > 0u);
-        const int32_t core_ry = core_ry_fixed;
-        const int32_t core_rx = core_rx_fixed;
-        const int32_t hole_ry = tof_clamp_i32((core_ry * 60) / 100, 7, core_ry - 3);
-        const int32_t hole_rx = tof_clamp_i32((core_rx * 60) / 100, 7, core_rx - 3);
+        const bool has_filament = (roll_segments > 0u);
         const int32_t center_x = TOF_TP_X0 + (area_w / 2);
         int32_t cy = roll_top + (roll_h / 2) - 6;
-        cy = tof_clamp_i32(cy, roll_top + outer_ry + 2, roll_bottom - outer_ry - 2);
+        cy = tof_clamp_i32(cy, roll_top + flange_ry + 2, roll_bottom - flange_ry - 2);
         const int32_t back_cx = center_x - (depth / 2);
         const int32_t front_cx = center_x + (depth / 2);
 
-        int32_t roll_x0 = back_cx - outer_rx - 3;
-        int32_t roll_x1 = front_cx + outer_rx + 3;
-        int32_t roll_y0 = cy - outer_ry - 3;
-        int32_t roll_y1 = cy + outer_ry + 8;
+        int32_t roll_x0 = back_cx - flange_rx - 3;
+        int32_t roll_x1 = front_cx + flange_rx + 3;
+        int32_t roll_y0 = cy - flange_ry - 3;
+        int32_t roll_y1 = cy + flange_ry + 8;
 
         if (s_tp_prev_rect_valid)
         {
@@ -3123,21 +3187,23 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         }
         tof_tp_fill_bg_rect(roll_x0, roll_y0, roll_x1, roll_y1, render_live);
 
-        const int32_t shadow_y = tof_clamp_i32(cy + outer_ry + 2, TOF_TP_Y0, roll_bottom + 2);
+        const int32_t shadow_y = tof_clamp_i32(cy + flange_ry + 2, TOF_TP_Y0, roll_bottom + 2);
         tof_draw_filled_ellipse(center_x + (depth / 8),
                                 shadow_y,
-                                outer_rx + (depth / 5),
-                                tof_clamp_i32(outer_ry / 16, 2, 6),
+                                flange_rx + (depth / 5),
+                                tof_clamp_i32(flange_ry / 16, 2, 6),
                                 pack_rgb565(8u, 8u, 10u));
         tof_draw_filled_ellipse(center_x + (depth / 10),
                                 shadow_y - 1,
-                                outer_rx + (depth / 7),
-                                tof_clamp_i32(outer_ry / 20, 2, 4),
+                                flange_rx + (depth / 7),
+                                tof_clamp_i32(flange_ry / 20, 2, 4),
                                 pack_rgb565(14u, 14u, 18u));
 
-        if (has_paper)
+        if (has_filament)
         {
-            for (int32_t y = -outer_ry; y <= outer_ry; y += 2)
+            /* Draw 2px red filament bands with 1px gray separator.
+             * Separator is intentionally thin (1/3 of a 3px separator baseline). */
+            for (int32_t y = -filament_ry; y <= filament_ry; y += 3)
             {
                 const int32_t y_abs = (y < 0) ? -y : y;
                 const int32_t py = cy + y;
@@ -3151,7 +3217,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                     continue;
                 }
 
-                const int32_t xw = tof_ellipse_half_width(outer_rx, outer_ry, y_abs);
+                const int32_t xw = tof_ellipse_half_width(filament_rx, filament_ry, y_abs);
                 int32_t x0 = back_cx - xw + 1;
                 int32_t x1 = front_cx + xw - 1;
                 x0 = tof_clamp_i32(x0, TOF_TP_X0, TOF_TP_X1);
@@ -3161,40 +3227,71 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                     continue;
                 }
 
-                const int32_t tone = 168 + (((outer_ry - y_abs) * 44) / tof_clamp_i32(outer_ry, 1, 1024));
+                const int32_t tone = 168 + (((filament_ry - y_abs) * 44) / tof_clamp_i32(filament_ry, 1, 1024));
                 display_hal_fill_rect(x0, py, x1, py1, tof_tp_paper_color(tone, render_live));
+
+                const int32_t gy = py1 + 1;
+                if (gy >= TOF_TP_Y0 && gy <= TOF_TP_Y1)
+                {
+                    const int32_t gap_tone = tone - 24;
+                    display_hal_fill_rect(x0, gy, x1, gy, tof_tp_filament_gap_color(gap_tone, render_live));
+                }
             }
         }
 
-        const uint16_t back_base = has_paper ? tof_tp_paper_color(110, render_live) : tof_tp_core_color(154, render_live);
-        tof_draw_filled_ellipse(back_cx, cy, outer_rx, outer_ry, back_base);
+        const uint16_t back_base = tof_tp_core_color(154, render_live);
+        tof_draw_filled_ellipse(back_cx, cy, flange_rx, flange_ry, back_base);
         tof_draw_ellipse_ring(back_cx,
                               cy,
-                              outer_rx,
-                              outer_ry,
+                              flange_rx,
+                              flange_ry,
                               2,
-                              has_paper ? tof_tp_paper_color(84, render_live) : tof_tp_core_color(118, render_live),
+                              tof_tp_core_color(118, render_live),
                               back_base);
-        tof_draw_filled_ellipse(back_cx, cy, hole_rx, hole_ry, pack_rgb565(18u, 16u, 14u));
+        if (has_filament && (filament_rx > (hub_outer_rx + 1)) && (filament_ry > (hub_outer_ry + 1)))
+        {
+            tof_draw_ellipse_ring(back_cx,
+                                  cy,
+                                  filament_rx - 1,
+                                  filament_ry - 1,
+                                  2,
+                                  tof_tp_paper_color(80, render_live),
+                                  tof_tp_paper_color(138, render_live));
+        }
+        tof_draw_spoked_flange_face(back_cx,
+                                    cy,
+                                    flange_rx,
+                                    flange_ry,
+                                    hub_outer_rx,
+                                    hub_outer_ry,
+                                    bore_rx,
+                                    bore_ry,
+                                    filament_rx,
+                                    filament_ry,
+                                    back_base,
+                                    pack_rgb565(6u, 6u, 8u),
+                                    tof_tp_paper_color(188, render_live),
+                                    pack_rgb565(12u, 12u, 14u),
+                                    bar_segments);
 
-        const uint16_t front_base = has_paper ? tof_tp_paper_color(232, render_live) : tof_tp_core_color(182, render_live);
-        tof_draw_filled_ellipse(front_cx, cy, outer_rx, outer_ry, front_base);
+        const uint16_t front_base = tof_tp_core_color(182, render_live);
+        tof_draw_filled_ellipse(front_cx, cy, flange_rx, flange_ry, front_base);
         tof_draw_ellipse_ring(front_cx,
                               cy,
-                              outer_rx,
-                              outer_ry,
+                              flange_rx,
+                              flange_ry,
                               2,
-                              has_paper ? tof_tp_paper_color(168, render_live) : tof_tp_core_color(118, render_live),
+                              tof_tp_core_color(118, render_live),
                               front_base);
 
-        for (int32_t i = 0; has_paper && i < 4; i++)
+        for (int32_t i = 0; has_filament && i < 4; i++)
         {
-            const int32_t ry_layer = outer_ry - 3 - (i * 5);
-            if (ry_layer <= (core_ry + 2))
+            const int32_t ry_layer = filament_ry - 3 - (i * 5);
+            if (ry_layer <= (hub_outer_ry + 2))
             {
                 break;
             }
-            const int32_t rx_layer = (outer_rx * ry_layer) / outer_ry;
+            const int32_t rx_layer = (filament_rx * ry_layer) / tof_clamp_i32(filament_ry, 1, 1024);
             const int32_t tone = 228 - (i * 16);
             tof_draw_ellipse_ring(front_cx,
                                   cy,
@@ -3205,20 +3302,26 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                                   front_base);
         }
 
-        const uint16_t core_base = tof_tp_core_color(182, render_live);
-        tof_draw_filled_ellipse(front_cx, cy, core_rx, core_ry, core_base);
-        tof_draw_ellipse_ring(front_cx, cy, core_rx, core_ry, 2, tof_tp_core_color(118, render_live), core_base);
-        tof_draw_filled_ellipse(front_cx, cy, hole_rx, hole_ry, pack_rgb565(24u, 22u, 20u));
-        tof_draw_filled_ellipse(front_cx + 1,
-                                cy - 1,
-                                tof_clamp_i32((hole_rx * 68) / 100, 4, hole_rx),
-                                tof_clamp_i32((hole_ry * 68) / 100, 4, hole_ry),
-                                pack_rgb565(11u, 11u, 13u));
+        tof_draw_spoked_flange_face(front_cx,
+                                    cy,
+                                    flange_rx,
+                                    flange_ry,
+                                    hub_outer_rx,
+                                    hub_outer_ry,
+                                    bore_rx,
+                                    bore_ry,
+                                    filament_rx,
+                                    filament_ry,
+                                    front_base,
+                                    pack_rgb565(4u, 4u, 6u),
+                                    tof_tp_paper_color(208, render_live),
+                                    pack_rgb565(10u, 10u, 12u),
+                                    bar_segments);
 
-        s_tp_prev_x0 = (int16_t)tof_clamp_i32(back_cx - outer_rx - 3, TOF_TP_X0, TOF_TP_X1);
-        s_tp_prev_y0 = (int16_t)tof_clamp_i32(cy - outer_ry - 3, TOF_TP_Y0, TOF_TP_Y1);
-        s_tp_prev_x1 = (int16_t)tof_clamp_i32(front_cx + outer_rx + 3, TOF_TP_X0, TOF_TP_X1);
-        s_tp_prev_y1 = (int16_t)tof_clamp_i32(cy + outer_ry + 8, TOF_TP_Y0, TOF_TP_Y1);
+        s_tp_prev_x0 = (int16_t)tof_clamp_i32(back_cx - flange_rx - 3, TOF_TP_X0, TOF_TP_X1);
+        s_tp_prev_y0 = (int16_t)tof_clamp_i32(cy - flange_ry - 3, TOF_TP_Y0, TOF_TP_Y1);
+        s_tp_prev_x1 = (int16_t)tof_clamp_i32(front_cx + flange_rx + 3, TOF_TP_X0, TOF_TP_X1);
+        s_tp_prev_y1 = (int16_t)tof_clamp_i32(cy + flange_ry + 8, TOF_TP_Y0, TOF_TP_Y1);
         s_tp_prev_rect_valid = true;
         s_tp_last_roll_mm_q8 = model_mm_q8;
     }
@@ -3230,8 +3333,8 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
     tof_draw_brand_mark();
 
     s_tp_last_tick = tick;
-    s_tp_last_outer_ry = (uint16_t)outer_ry;
-    s_tp_last_outer_rx = (uint16_t)outer_rx;
+    s_tp_last_outer_ry = (uint16_t)filament_ry;
+    s_tp_last_outer_rx = (uint16_t)filament_rx;
     s_tp_last_fullness_q10 = bar_fullness_draw_q10;
     s_tp_last_live = render_live;
     s_tp_force_redraw = false;
@@ -3513,7 +3616,7 @@ static void tof_ui_init(void)
     s_tp_prev_y1 = 0;
     s_ai_log_last_tick = 0u;
     s_est_near_mm = TOF_TP_MM_FULL_NEAR;
-    s_est_far_mm = TOF_TP_MM_EMPTY_FAR;
+    s_est_far_mm = TOF_TP_BAR_MM_EMPTY_SCALED;
     s_est_mm_q8 = 0u;
     s_est_conf_q10 = 0u;
     s_est_fullness_q10 = 640u;
