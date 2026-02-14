@@ -1551,7 +1551,7 @@ static void tof_update_roll_alert_ui(uint32_t fullness_q10, bool live_data, uint
 
     if (s_alert_popup_active)
     {
-        /* Keep popup topmost even while TP roll redraws underneath. */
+        /* Keep popup topmost even while spool redraws underneath. */
         tof_draw_roll_status_popup(live_data, s_alert_popup_level);
     }
     else if (s_alert_popup_prev_drawn)
@@ -2533,7 +2533,7 @@ static void tof_tp_fill_bg_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
     }
 }
 
-static uint16_t tof_tp_paper_color(int32_t tone, bool live_data)
+static uint16_t tof_spool_filament_color(int32_t tone, bool live_data)
 {
     tone = tof_clamp_i32(tone, 0, 255);
     /* Filament red gradient for spool windings. */
@@ -2912,7 +2912,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
         return;
     }
 
-    /* Rewritten TP detection pipeline:
+    /* Rewritten spool detection pipeline:
      * 1) use one AI-independent input frame for state decisions;
      * 2) detect sparse-full and hard-empty explicitly;
      * 3) smooth only after state decision to keep UI reactive.
@@ -3228,7 +3228,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                 }
 
                 const int32_t tone = 168 + (((filament_ry - y_abs) * 44) / tof_clamp_i32(filament_ry, 1, 1024));
-                display_hal_fill_rect(x0, py, x1, py1, tof_tp_paper_color(tone, render_live));
+                display_hal_fill_rect(x0, py, x1, py1, tof_spool_filament_color(tone, render_live));
 
                 const int32_t gy = py1 + 1;
                 if (gy >= TOF_TP_Y0 && gy <= TOF_TP_Y1)
@@ -3255,8 +3255,8 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                                   filament_rx - 1,
                                   filament_ry - 1,
                                   2,
-                                  tof_tp_paper_color(80, render_live),
-                                  tof_tp_paper_color(138, render_live));
+                                  tof_spool_filament_color(80, render_live),
+                                  tof_spool_filament_color(138, render_live));
         }
         tof_draw_spoked_flange_face(back_cx,
                                     cy,
@@ -3270,7 +3270,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                                     filament_ry,
                                     back_base,
                                     pack_rgb565(6u, 6u, 8u),
-                                    tof_tp_paper_color(188, render_live),
+                                    tof_spool_filament_color(188, render_live),
                                     pack_rgb565(12u, 12u, 14u),
                                     bar_segments);
 
@@ -3298,7 +3298,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                                   rx_layer,
                                   ry_layer,
                                   1,
-                                  tof_tp_paper_color(tone, render_live),
+                                  tof_spool_filament_color(tone, render_live),
                                   front_base);
         }
 
@@ -3314,7 +3314,7 @@ static void tof_update_spool_model(const uint16_t mm[64], bool live_data, uint32
                                     filament_ry,
                                     front_base,
                                     pack_rgb565(4u, 4u, 6u),
-                                    tof_tp_paper_color(208, render_live),
+                                    tof_spool_filament_color(208, render_live),
                                     pack_rgb565(10u, 10u, 12u),
                                     bar_segments);
 
@@ -3414,7 +3414,7 @@ static void tof_update_debug_panel(const uint16_t mm[64],
              got_complete ? 1u : 0u);
     tof_dbg_draw_line(0u, line, s_ui_dbg_fg);
 
-    snprintf(line, sizeof(line), "TP:%u-%u",
+    snprintf(line, sizeof(line), "SP:%u-%u",
              (unsigned)TOF_TP_MM_FULL_NEAR,
              (unsigned)TOF_TP_BAR_MM_EMPTY);
     tof_dbg_draw_line(1u, line, s_ui_dbg_fg);

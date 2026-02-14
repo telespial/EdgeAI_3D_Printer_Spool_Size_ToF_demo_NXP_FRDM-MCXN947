@@ -1,7 +1,7 @@
 # ToF Debug Status (TMF8828 + FRDM-MCXN947 + LCD-PAR-S035)
 
 Date: 2026-02-13
-Project: ToF__demo_NXP_FRDM-MCXN947
+Project: EdgeAI_3D_Printer_Spool_Size_ToF_demo_NXP_FRDM-MCXN947
 
 ## Current Runtime Status
 
