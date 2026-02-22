@@ -10,3 +10,7 @@ __pycache__/
 
 # Local reference image; do not track in project history
 docs/spool.png
+
+# Local agent instructions (keep local, do not publish)
+AGENTS.md
+agents.md

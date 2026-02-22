@@ -19,3 +19,9 @@ Format:
 - `2026-02-14` | `BUILD_DIR=mcuxsdk_ws/build_spool ./tools/flash_frdmmcxn947.sh` | PASS | Flashed FRDM-MCXN947 with recovered spool baseline.
 - `2026-02-14` | `cp .../tof_demo_cm33_core0.elf failsafe/FAILSAFE_2026-02-14_v1_spool_recovered_baseline.elf` | PASS | Published spool failsafe artifact.
 - `2026-02-14` | docs baseline sync (`STATUS.md`, `docs/PROJECT_STATE.md`, `docs/START_HERE.md`, `docs/BUILD_FLASH.md`, `docs/RESTORE_POINTS.md`, `docs/failsafe.md`) | PASS | Reintroduced spool restore-point + failsafe workflow and published v1 baseline metadata.
+- `2026-02-14` | `./tools/setup_mcuxsdk_ws.sh` | FAIL | `west update` failed repeatedly for project `g2d_dpu` during dependency sync.
+- `2026-02-14` | `BUILD_DIR=mcuxsdk_ws/build_spool ./tools/build_frdmmcxn947.sh debug` + `BUILD_DIR=mcuxsdk_ws/build_spool ./tools/flash_frdmmcxn947.sh` | PASS | Revalidated compile + flash on FRDM-MCXN947; firmware image flashed successfully via LinkServer probe #1.
+- 2026-02-22 07:53:25 | inspect 3D printer demo repo AGENTS tracking/ignore/docs state before hide operation
+- 2026-02-22 07:53:35 | preparing targeted AGENTS ignore/untrack patch and scoped commit in dirty 3D printer repo
+- 2026-02-22 07:53:43 | update .gitignore + git rm --cached AGENTS.md | hide AGENTS instructions from GitHub while keeping local file
+- 2026-02-22 07:53:58 | update docs/PROJECT_STATE.md | recorded AGENTS ignore/untrack repo-hygiene change

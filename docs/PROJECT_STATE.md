@@ -1,7 +1,14 @@
 # Project State
 
-Last updated: 2026-02-14
+Last updated: 2026-02-22
 Project: `EdgeAI_3D_Printer_Spool_Size_ToF_demo_NXP_FRDM-MCXN947`
+
+## Update 2026-02-22 (Repo Hygiene: Hide Local Agent Instructions)
+- Removed `AGENTS.md` from git tracking (`git rm --cached AGENTS.md`) while preserving local file content on disk.
+- Added ignore rules in `.gitignore`:
+  - `AGENTS.md`
+  - `agents.md`
+- Result: local agent-instruction files are no longer published to GitHub for this project repo.
 
 ## Current Baseline
 - Release baseline: v1 recovered spool baseline
@@ -35,6 +42,13 @@ Project: `EdgeAI_3D_Printer_Spool_Size_ToF_demo_NXP_FRDM-MCXN947`
   - `BUILD_DIR=mcuxsdk_ws/build_spool ./tools/build_frdmmcxn947.sh debug`
   - `BUILD_DIR=mcuxsdk_ws/build_spool ./tools/flash_frdmmcxn947.sh`
 - Published v1 spool failsafe and restore metadata in this repository.
+
+## Update 2026-02-14 (Compile + Flash Recheck)
+- Attempted workspace sync with `./tools/setup_mcuxsdk_ws.sh`; dependency update failed for `g2d_dpu`.
+- Build and flash still completed successfully for this project using:
+  - `BUILD_DIR=mcuxsdk_ws/build_spool ./tools/build_frdmmcxn947.sh debug`
+  - `BUILD_DIR=mcuxsdk_ws/build_spool ./tools/flash_frdmmcxn947.sh`
+- LinkServer reported successful probe match and flash flow on FRDM-MCXN947.
 
 ## Update 2026-02-13
 - Added host-side timestamped capture utility: `tools/capture_ai_csv.sh`.
