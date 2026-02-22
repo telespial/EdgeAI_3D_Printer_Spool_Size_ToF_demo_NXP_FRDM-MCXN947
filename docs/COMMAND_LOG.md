@@ -25,3 +25,4 @@ Format:
 - 2026-02-22 07:53:35 | preparing targeted AGENTS ignore/untrack patch and scoped commit in dirty 3D printer repo
 - 2026-02-22 07:53:43 | update .gitignore + git rm --cached AGENTS.md | hide AGENTS instructions from GitHub while keeping local file
 - 2026-02-22 07:53:58 | update docs/PROJECT_STATE.md | recorded AGENTS ignore/untrack repo-hygiene change
+- 2026-02-22 07:54:00 | post-push verification (AGENTS local presence) | AGENTS no longer tracked on GitHub
